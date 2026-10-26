@@ -19,15 +19,94 @@ Referencia: [Vite](https://vite.dev/guide/) y [PGlite](https://pglite.dev/docs/)
 ## Qué incluye el MVP
 
 - Lista, creación, edición y borrado con confirmación.
-- Palabra o expresión, traducción, idiomas distintos, tipo, notas opcionales y entre 1 y 10 ejemplos.
+- Palabra o expresión, traducción, idiomas distintos, tipo, notas opcionales y entre 1 y 10 ejemplos, cada uno con una traducción opcional.
+- Para verbos traducidos al inglés: pasado simple, participio pasado y forma en `-ing`, todos opcionales.
 - Búsqueda en palabra y traducción, sin distinguir mayúsculas. No elimina diferencias de acentos.
 - Colección limitada a la pareja exacta de idiomas seleccionada, combinable con búsqueda y filtro por tipo.
+- Colecciones personalizadas, por ejemplo «A1» o «Importantes», para reunir palabras de distintos tipos dentro de esa pareja.
+- Exportación JSON de la colección completa para conservar una copia del vocabulario.
+- Práctica básica: preguntas mezcladas por rondas sobre traducciones y formas inglesas guardadas, con respuesta oculta y opción de escribirla.
 - Interfaz traducida a los siete idiomas disponibles, adaptable a móvil, con diálogos nativos y etiquetas de formulario. Las tarjetas conservan su contenido y sus etiquetas.
 - Estados de carga, colección vacía, errores y mensajes de éxito.
 - Seis entradas ficticias de demostración, cargadas una sola vez. Borrarlas no las repone al reiniciar.
 - Idiomas iniciales: español, inglés, francés, alemán, italiano, portugués y japonés. Se pueden añadir más ampliando los catálogos del backend y frontend.
 
-La aplicación permite guardar palabras repetidas: una misma palabra puede tener distintos significados o contextos. No hay conjugaciones ni sistema de estudio todavía.
+La aplicación permite guardar palabras repetidas: una misma palabra puede tener distintos significados o contextos. Las formas inglesas se guardan manualmente y ya pueden practicarse; todavía no hay seguimiento del estudio.
+
+### Colecciones personalizadas
+
+**Tipo de palabra** describe qué es una entrada (verbo, adjetivo…). Una **colección** es una agrupación que eliges tú: «A1» puede contener `dormir → sleep` y `cansado → tired` aunque tengan tipos distintos. La misma tarjeta puede estar también en «Importantes», sin duplicar sus datos.
+
+Selecciona una pareja, pulsa **Nueva colección**, escribe el nombre y créala. Con la colección seleccionada, usa **Añadir palabra existente** para incorporar tarjetas de esa pareja. El selector **Todas** muestra de nuevo todas las tarjetas. La búsqueda y el filtro por tipo siguen funcionando dentro de la colección; **Practicar** usa las tarjetas que se ven. **Quitar de la colección** desvincula una tarjeta, pero la deja en **Todas**. **Eliminar colección** pide confirmación y conserva todas sus palabras. Si creas una palabra nueva mientras ves una colección, se guarda en **Todas**; después puedes añadirla a la colección.
+
+Cada colección pertenece a una pareja ordenada: Español → Inglés y Alemán → Inglés tienen colecciones diferentes. Los nombres se pueden repetir en parejas distintas, pero no dos veces en la misma pareja aunque cambies mayúsculas. Por ahora no se pueden renombrar colecciones. El nivel «A1» es solo un nombre que pones tú; la aplicación no asigna niveles automáticamente.
+
+La migración `004_collections.sql` añade `collections` y `collection_words`. Esta segunda tabla guarda la relación entre tarjetas y colecciones; una tarjeta puede aparecer en varias. Al borrar una tarjeta se limpian sus relaciones; al cambiar sus idiomas, se retira de las colecciones de la pareja anterior. La migración no modifica las palabras existentes. Antes de actualizar una base con datos importantes, conserva una copia de `backend/data/` con el servidor detenido.
+
+**Qué conviene entender:** la palabra y la colección viven en tablas distintas. `collection_words` guarda pares de identificadores para relacionarlas; por eso una palabra puede estar en «A1» y «Importantes» a la vez. El filtro de colección se suma a los de búsqueda y tipo: las condiciones deben cumplirse juntas. El frontend solicita los datos a la API y muestra el resultado, mientras la base mantiene la pertenencia aunque cierres la página.
+
+### Primeras formas de verbos ingleses
+
+Si una tarjeta tiene **tipo Verbo** e **idioma de la traducción Inglés**, el formulario ofrece tres campos opcionales. La traducción principal sigue siendo la forma base. Por ejemplo, `dormir → sleep` puede guardar pasado simple `slept`, participio pasado `slept` y forma `-ing` `sleeping`. Solo aparecen en la tarjeta los campos rellenos. El programa no los calcula ni los consulta en Internet: debes comprobar que los escribes correctamente.
+
+`sleeping` es la forma en `-ing`; un presente continuo completo necesita también sujeto y auxiliar, por ejemplo `I am sleeping`. Esta distinción evita etiquetar incorrectamente una forma aislada como una oración completa. Si cambias el tipo de la tarjeta o su idioma de traducción y guardas, las formas inglesas se vacían porque ya no corresponden a ese registro. Si vuelves a seleccionar Verbo e Inglés **antes de guardar**, lo escrito en el formulario sigue disponible.
+
+La migración `003_english_verb_forms.sql` añade una columna JSONB con un objeto vacío como valor inicial. Conserva palabras, ejemplos, notas e identificadores existentes. Se ejecuta al arrancar y es repetible; registra su nombre en `app_migrations`. A diferencia de la conversión anterior, la creación de la columna y el registro son dos instrucciones: si falla el registro, el siguiente arranque vuelve a comprobar la columna y lo completa. La API acepta peticiones antiguas sin las formas; al editar un verbo inglés así, conserva sus formas existentes. Cada valor se limita a 120 caracteres y el backend rechaza formas rellenas en otros tipos o idiomas.
+
+Para probarlo: crea `dormir → sleep`, selecciona **Verbo** e **Inglés** como idioma de traducción, rellena `slept`, `slept` y `sleeping`, guarda y vuelve a abrir la tarjeta. Comprueba también que un sustantivo o una traducción a francés no muestra esos campos. Las pruebas automatizadas usan PGlite en memoria; no se ha probado todavía la migración contra un servidor PostgreSQL independiente ni se ha hecho revisión visual de estos campos en navegador.
+
+### Tarjetas, filtros y práctica
+
+La palabra y su traducción tienen ahora un tamaño parecido y una flecha muestra la dirección, por ejemplo **dormir → sleep**. Los filtros de tipo usan los mismos colores que las tarjetas. El filtro seleccionado se distingue también por su relleno y por `aria-pressed`; el nombre del tipo sigue visible. Los botones **Editar** y **Borrar** incluyen texto, un símbolo y una zona de pulsación mayor. El borrado conserva su confirmación.
+
+Pulsa **Practicar** cuando haya palabras en la pareja seleccionada. Se preparan preguntas con las palabras que cumplen la búsqueda y el filtro de tipo actuales. Cada tarjeta aporta una pregunta por su traducción principal. Si es un verbo traducido al inglés, aporta además una pregunta por cada forma guardada: pasado simple, participio pasado y forma `-ing`. Un verbo antiguo sin formas sigue aportando solo la pregunta de traducción. Las preguntas se mezclan al comenzar cada ronda y no se repite ninguna pregunta dentro de ella. Una misma palabra puede aparecer varias veces con etiquetas distintas. Piensa la respuesta y elige **Mostrar respuesta** o **Escribir respuesta**. Después pasa a la siguiente pregunta; al terminar puedes iniciar **Nueva ronda**, con otra mezcla. **Volver a las tarjetas** recupera la lista. Por ejemplo, `dormir → sleep` con `slept` y `sleeping` guardados produce tres preguntas: traducción, pasado simple y forma `-ing`.
+
+Al escribir, **Comprobar** compara tu texto con la respuesta guardada para esa pregunta, ignorando mayúsculas, espacios sobrantes y diferencias de composición Unicode. Conserva tildes y otros caracteres que pueden distinguir palabras. Si coincide, aparece un **✓** y el mensaje «¡Correcto!»; si difiere, un aviso ámbar. Ambos estados tienen texto además de color. Una respuesta distinta puede ser válida en otro contexto: el mensaje indica únicamente que no coincide con la respuesta guardada y muestra esta última. No hay puntuación ni seguimiento persistente. La respuesta no se inserta en el HTML hasta que la pides o compruebas tu intento. `StudyMode.tsx` mantiene con `useState` la mezcla, la posición, el texto escrito y si se ha revelado; esos datos solo existen mientras está abierto el ejercicio. La mezcla usa Fisher–Yates sobre una copia de las preguntas para visitarlas una vez por ronda. La API y la base de datos no cambian por esta función.
+
+### Exportar la colección
+
+Pulsa **Exportar colecciones** junto a **Añadir palabra**. El navegador descargará un archivo `vocabia-colecciones-AAAA-MM-DD.json` con **todas** las parejas de idiomas, incluso las que no aparecen por la selección, la búsqueda o el filtro de tipo actuales. Incluye todas las colecciones y también las palabras que aún no pertenecen a ninguna, con sus traducciones, notas, ejemplos y formas verbales guardadas. También funciona si la pareja visible está vacía. El archivo queda en la carpeta de descargas que use tu navegador; la aplicación no lo añade al repositorio.
+
+El JSON lleva `format: "vocabia-words"`, `version: 2` y `exportedAt` para reconocer su estructura en una futura importación. Incluye los nombres y parejas de todas las colecciones, también las vacías, y cada palabra indica a cuáles pertenece. No incluye IDs internos, que solo sirven dentro de una base de datos concreta. El archivo **sí contiene tus notas y ejemplos**, por lo que conviene guardarlo en un lugar privado si escribes contenido personal. Esta etapa solo descarga una copia: todavía no permite importar ni restaura automáticamente los datos. Conservar una copia de `backend/data/` con el servidor detenido sigue siendo la opción para respaldar toda la base local tal cual.
+
+Para comprobarlo, crea una tarjeta Español → Inglés y otra Alemán → Español; selecciona la primera pareja, pulsa **Exportar colecciones** y abre el JSON descargado: deben aparecer ambas. La descarga usa una consulta general a la API, sin filtros, y muestra un error sin ocultar las tarjetas si esa consulta falla. Las pruebas comprueban el contenido del documento y la consulta sin filtros; la descarga real debe revisarse en tu navegador.
+
+### Ejemplos con traducción y tarjetas por color
+
+Cada ejemplo tiene una frase obligatoria y una traducción opcional. Por ejemplo, para Español → Inglés:
+
+```json
+{
+  "text": "Me di cuenta del error.",
+  "translation": "I realized the mistake."
+}
+```
+
+En el formulario, cada frase tiene debajo su campo de traducción. Añadir o quitar un ejemplo actúa sobre el par completo; borrar solamente la traducción conserva la frase. Ambos campos admiten hasta 500 caracteres. El texto del ejemplo usa el idioma de la palabra y su traducción el idioma de destino, también mediante el atributo HTML `lang`.
+
+En las tarjetas, la traducción aparece debajo de su frase cuando tiene contenido. Las frases no se traducen automáticamente ni cambian al elegir el idioma de la interfaz.
+
+Los colores dependen del tipo: verde para sustantivos, azul para verbos, rosa para adjetivos, violeta para adverbios, amarillo para expresiones y arena para otros. El fondo es suave y el borde superior identifica el tipo; la etiqueta escrita se conserva para que no haya que distinguirlo únicamente por el color. El color no se almacena en la base: se deriva de `wordType` mediante clases CSS.
+
+**Decisión de diseño:** mantener una regla de color por tipo ayuda a reconocer las categorías; asignar colores aleatorios añadiría ruido sin explicar nada. No se añaden todavía preferencias de colores ni un selector por tarjeta.
+
+### Primera migración de datos
+
+Antes, `examples` era una lista de frases; ahora es una lista de objetos con `text` y `translation`. La columna ya es JSONB, de modo que cambiamos la forma de sus datos sin añadir ni borrar columnas.
+
+Al iniciar el backend, después del esquema inicial, se ejecuta `database/002_example_translations.sql`:
+
+1. Convierte cada frase antigua en `{ "text": "frase original", "translation": "" }`.
+2. Conserva el orden, los ejemplos que ya tengan traducción y el resto de los datos de cada palabra, incluidos identificadores y fechas.
+3. Registra la aplicación en `app_migrations`. En posteriores arranques no vuelve a modificar los ejemplos.
+
+La conversión y su registro forman una sola instrucción SQL: si falla una parte, se revierte todo. Esto es **atomicidad**, es decir, guardar el cambio completo o no guardar ninguna de sus partes. Las pruebas verifican esa reversión con un fallo provocado, sin tocar la base local.
+
+La API admite temporalmente peticiones con el formato antiguo de frases, pero las normaliza y responde siempre con objetos. Así los clientes anteriores no tienen que perder datos; el frontend de esta versión ya envía objetos. Las traducciones vacías o no enviadas se guardan como `""` y se recortan los espacios exteriores.
+
+Para actualizar, detén el backend anterior y arranca esta versión con `npm run dev`. Antes de aplicar cambios de datos sobre una colección importante, guarda una copia: en modo local, con el backend detenido, conserva una copia de `backend/data/`; para PostgreSQL independiente utiliza una copia de seguridad de esa base. Los datos no se exportan ni se envían a servicios externos por esta migración.
+
+Verificación de esa mejora en su momento: `npm test` pasó **54 pruebas** (23 de API/migración y 31 de interfaz), `npm run typecheck` pasó y `npm run build` compiló ambos paquetes. Se comprobó el formato anterior, el formato nuevo, las traducciones opcionales, la edición de pares y la migración repetida o fallida. Las pruebas SQL usan PGlite.
 
 ### Mi idioma de referencia
 
@@ -102,6 +181,13 @@ Vocabia/
       interfaceText.ts      Controles, formularios, opciones y mensajes traducidos
       LanguageFlag.tsx      Banderas SVG del selector de idioma
       StudyLanguages.tsx    Selección del idioma de estudio en la pantalla principal
+      StudyMode.tsx         Ejercicio sencillo de recordar y revelar traducciones
+      StudyMode.test.tsx    Pruebas de rondas y respuestas escritas
+      CollectionsPanel.tsx   Crear, seleccionar y gestionar colecciones
+      collectionsText.ts     Textos de colecciones en los siete idiomas
+      exportWords.ts         Documento JSON versionado y descarga en el navegador
+      exportWords.test.ts    Prueba del contenido exportado
+      verbFormsText.ts      Etiquetas de las formas inglesas en los siete idiomas
       styles.css            Diseño y adaptación a móvil
       *.test.tsx            Pruebas de interacción
     vite.config.ts          React y proxy hacia la API
@@ -109,12 +195,17 @@ Vocabia/
     src/
       server.ts             Arranque y cierre del servidor
       app.ts                Rutas HTTP y manejo de errores
+      collections.ts        Rutas de colecciones y sus palabras
       database.ts           Conexión, esquema y demostración
       validation.ts         Reglas de los datos recibidos
       app.test.ts           Pruebas de API y SQL
+      database.test.ts      Conservación de datos y atomicidad de la migración
     .env.example            Configuración de ejemplo, sin secretos
   database/
     001_initial.sql         Esquema inicial
+    002_example_translations.sql  Conversión de ejemplos antiguos sin perder frases
+    003_english_verb_forms.sql    Columna opcional para formas de verbos ingleses
+    004_collections.sql     Colecciones y relación con palabras
   package.json              Comandos comunes
   package-lock.json         Versiones exactas de las dependencias
 ```
@@ -147,7 +238,7 @@ Este modo requiere instalar PostgreSQL por separado; el proyecto no lo instala n
 
 El usuario necesita permisos para crear tablas en esa base. `.env` está ignorado: nunca subas credenciales. Cambiar entre PGlite y PostgreSQL **no copia** los datos de un motor a otro.
 
-El esquema inicial usa `CREATE TABLE IF NOT EXISTS`: sirve para este MVP, pero no modifica tablas existentes. Antes de cambiar columnas en otra etapa añadiremos migraciones incrementales, es decir, scripts para evolucionar la base sin perder datos.
+El esquema inicial usa `CREATE TABLE IF NOT EXISTS` y no modifica columnas de tablas existentes. Las migraciones incrementales, empezando por `002_example_translations.sql`, evolucionan los datos y registran su aplicación en `app_migrations`. Las siguientes modificaciones deben añadirse como nuevas migraciones, conservando las anteriores.
 
 ## Comprobar el proyecto
 
@@ -174,6 +265,8 @@ Comprobación manual recomendada:
 7. Añade otra entrada, detén ambos procesos y vuelve a arrancar: debe conservarse.
 8. Revisa la interfaz en un ancho de 375 px, con teclado y a zoom del 200 %.
 
+Para probar las colecciones, crea primero una tarjeta de tipo Verbo y otra de tipo Adjetivo en Español → Inglés. Crea «A1», añade ambas desde **Añadir palabra existente** y comprueba que aparecen juntas. Crea «Importantes» y añade una de ellas también allí. Quita una palabra de «A1»: debe seguir en «Importantes» y en «Todas». Cambia a otra pareja y vuelve: las colecciones de Español → Inglés reaparecen. Elimina «A1» tras confirmar: sus palabras deben permanecer en «Todas». Exporta y comprueba que el JSON incluye las colecciones restantes y la pertenencia de cada palabra.
+
 El DOM simulado no verifica el diseño real ni el comportamiento del navegador. La compilación tampoco comprueba el despliegue. El backend compilado puede arrancarse con `npm run start -w backend`, pero servir frontend y API juntos en producción queda para una etapa posterior.
 
 ### Resultado de la verificación inicial — 23 de octubre de 2026
@@ -193,10 +286,15 @@ En Windows, con Node 24.14.0 y npm 11.9.0:
 
 | Método | Ruta | Resultado |
 | --- | --- | --- |
-| GET | `/api/words?sourceLanguage=es&targetLanguage=en&search=book&wordType=noun` | Lista de la pareja exacta, con búsqueda y tipo, 200 |
+| GET | `/api/words?sourceLanguage=es&targetLanguage=en&search=book&wordType=noun&collectionId=1` | Lista de la pareja exacta, con búsqueda, tipo y colección opcionales, 200 |
 | POST | `/api/words` | Crea una palabra, 201 |
 | PUT | `/api/words/:id` | Reemplaza los campos de una palabra, 200 |
 | DELETE | `/api/words/:id` | Borra una palabra, 204 |
+| GET | `/api/collections?sourceLanguage=es&targetLanguage=en` | Lista de colecciones de la pareja con número de palabras, 200 |
+| POST | `/api/collections` | Crea una colección con `name`, `sourceLanguage` y `targetLanguage`, 201; nombre duplicado, 409 |
+| DELETE | `/api/collections/:id` | Borra la colección, conserva sus palabras, 204 |
+| POST | `/api/collections/:id/words/:wordId` | Añade una palabra existente de la misma pareja, 204 |
+| DELETE | `/api/collections/:id/words/:wordId` | Quita una palabra de la colección, 204 |
 
 Si se envía un idioma de la pareja, deben enviarse los dos y ser distintos. La interfaz siempre envía ambos. La API conserva las consultas generales sin pareja y el parámetro anterior `language` para consultas directas, pero los controles de la aplicación mantienen la pareja seleccionada.
 
@@ -210,9 +308,11 @@ Cuerpo de creación y edición:
   "targetLanguage": "es",
   "wordType": "noun",
   "notes": "Puede tener otros significados.",
-  "examples": ["I read a book."]
+  "examples": [{ "text": "I read a book.", "translation": "Leo un libro." }]
 }
 ```
+
+Para un verbo con `targetLanguage: "en"`, se puede añadir `"englishVerbForms": { "past": "slept", "pastParticiple": "slept", "ing": "sleeping" }`. No se envía este objeto para otros idiomas o tipos, salvo que sus tres valores estén vacíos.
 
 Los errores devuelven `{ "error": "Mensaje" }`: 400 para datos inválidos, 404 para registros o rutas inexistentes, 413 para peticiones demasiado grandes y 500 para fallos inesperados. El formulario limita longitudes y el backend vuelve a validarlas. La API utiliza `$1`, `$2`, etc. para separar valores del SQL.
 
@@ -235,7 +335,7 @@ Antes de avanzar, intenta explicar ese recorrido con tus palabras y modificar un
 
 ## Siguientes etapas (sin implementar)
 
-1. **Estudio y contexto:** tarjetas, formas verbales y seguimiento. Primero definir cómo estudiarás realmente.
+1. **Datos y estudio:** diseñar una importación segura con validación y control de duplicados; después valorar ejercicios con frases completas y seguimiento.
 2. **Preparación para uso remoto:** usuarios, autorización, paginación si crece la colección, migraciones y despliegue con PostgreSQL independiente.
 3. **Automatización:** CI/CD cuando se defina un destino de despliegue. Docker cuando sea útil reproducir el entorno entre máquinas.
 4. **Integraciones opcionales:** traducción y voz cuando aporten valor a un flujo ya probado y se hayan evaluado coste y privacidad.

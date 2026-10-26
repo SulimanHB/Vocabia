@@ -21,6 +21,16 @@ export async function initializeDatabase(db: Database, seed = true) {
   const sql = await readFile(new URL('../../database/001_initial.sql', import.meta.url), 'utf8');
   // El script inicial no tiene funciones SQL ni puntos y coma dentro de cadenas.
   for (const statement of sql.split(';').filter(part => part.trim())) await db.query(statement);
+  await db.query('CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
+  const migration = await readFile(new URL('../../database/002_example_translations.sql', import.meta.url), 'utf8');
+  await db.query(migration);
+  // El ALTER TABLE es repetible; si falla el registro, el siguiente arranque lo completa.
+  const verbMigration = await readFile(new URL('../../database/003_english_verb_forms.sql', import.meta.url), 'utf8');
+  await db.query(verbMigration);
+  await db.query("INSERT INTO app_migrations(name) VALUES ('003_english_verb_forms') ON CONFLICT DO NOTHING");
+  const collectionsMigration = await readFile(new URL('../../database/004_collections.sql', import.meta.url), 'utf8');
+  for (const statement of collectionsMigration.split(';').filter(part => part.trim())) await db.query(statement);
+  await db.query("INSERT INTO app_migrations(name) VALUES ('004_collections') ON CONFLICT DO NOTHING");
   if (!seed) return;
   const examples = [
     ['serendipity', 'casualidad afortunada', 'en', 'es', 'noun', 'Encontrar algo valioso cuando buscabas otra cosa.', ['Finding this book was pure serendipity.']],
@@ -33,7 +43,8 @@ export async function initializeDatabase(db: Database, seed = true) {
   const params: unknown[] = [];
   const values = examples.map(([term, translation, source, target, type, notes, sentences]) => {
     const offset = params.length;
-    params.push(term, translation, source, target, type, notes, JSON.stringify(sentences));
+    const structuredExamples = Array.isArray(sentences) ? sentences.map(text => ({ text, translation: '' })) : [];
+    params.push(term, translation, source, target, type, notes, JSON.stringify(structuredExamples));
     return `(${Array.from({ length: 7 }, (_, index) => `$${offset + index + 1}${index === 6 ? '::jsonb' : '::text'}`).join(',')})`;
   });
   // Una sola instrucción: se guardan tanto el marcador como los ejemplos, o ninguno.

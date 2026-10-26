@@ -2,28 +2,60 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
-import type { Word } from './model';
+import type { Collection, Word } from './model';
+import { downloadExport } from './exportWords';
+
+vi.mock('./exportWords', () => ({ downloadExport: vi.fn() }));
 
 let words: Word[];
+let collections: Collection[];
 let lastSearch = '';
 beforeEach(() => {
+  vi.mocked(downloadExport).mockClear();
   localStorage.clear();
   // jsdom no implementa los diálogos. Las pruebas simulan solo su apertura y cierre.
   HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event('close')); };
-  words = [{ id: 1, term: 'book', translation: 'libro', sourceLanguage: 'es', targetLanguage: 'en', wordType: 'noun', examples: ['A book.'], notes: '' }];
+  words = [{ id: 1, term: 'book', translation: 'libro', sourceLanguage: 'es', targetLanguage: 'en', wordType: 'noun', examples: [{ text: 'A book.', translation: '' }], notes: '' }];
+  collections = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
     const path = new URL(url, 'http://localhost');
     const method = options.method ?? 'GET';
+    if (path.pathname === '/api/collections' && method === 'GET') {
+      return new Response(JSON.stringify(collections.filter(collection =>
+        (!path.searchParams.get('sourceLanguage') || collection.sourceLanguage === path.searchParams.get('sourceLanguage')) &&
+        (!path.searchParams.get('targetLanguage') || collection.targetLanguage === path.searchParams.get('targetLanguage'))
+      )));
+    }
     if (method === 'GET') {
       lastSearch = path.search;
       const query = path.searchParams.get('search') ?? '';
       return new Response(JSON.stringify(words.filter(word =>
         (word.term.includes(query) || word.translation.includes(query)) &&
-        word.sourceLanguage === path.searchParams.get('sourceLanguage') &&
-        word.targetLanguage === path.searchParams.get('targetLanguage') &&
-        (!path.searchParams.get('wordType') || word.wordType === path.searchParams.get('wordType'))
+        (!path.searchParams.get('sourceLanguage') || word.sourceLanguage === path.searchParams.get('sourceLanguage')) &&
+        (!path.searchParams.get('targetLanguage') || word.targetLanguage === path.searchParams.get('targetLanguage')) &&
+        (!path.searchParams.get('wordType') || word.wordType === path.searchParams.get('wordType')) &&
+        (!path.searchParams.get('collectionId') || word.collectionIds?.includes(Number(path.searchParams.get('collectionId'))))
       )));
+    }
+    if (path.pathname === '/api/collections' && method === 'POST') {
+      const collection = { ...JSON.parse(options.body as string), id: collections.length + 1, wordCount: 0 };
+      collections.push(collection);
+      return new Response(JSON.stringify(collection), { status: 201 });
+    }
+    if (path.pathname.startsWith('/api/collections/') && path.pathname.includes('/words/')) {
+      const [, , , collectionId, , wordId] = path.pathname.split('/');
+      const word = words.find(item => item.id === Number(wordId));
+      if (method === 'POST' && word) word.collectionIds = [...(word.collectionIds ?? []), Number(collectionId)];
+      if (method === 'DELETE' && word) word.collectionIds = (word.collectionIds ?? []).filter(id => id !== Number(collectionId));
+      collections = collections.map(collection => collection.id === Number(collectionId) ? { ...collection, wordCount: words.filter(item => item.collectionIds?.includes(collection.id)).length } : collection);
+      return new Response(null, { status: 204 });
+    }
+    if (path.pathname.startsWith('/api/collections/') && method === 'DELETE') {
+      const id = Number(path.pathname.split('/').pop());
+      collections = collections.filter(collection => collection.id !== id);
+      words.forEach(word => { word.collectionIds = word.collectionIds?.filter(collectionId => collectionId !== id); });
+      return new Response(null, { status: 204 });
     }
     if (method === 'POST') words.push({ ...JSON.parse(options.body as string), id: 2 });
     if (method === 'PUT') words[0] = { ...JSON.parse(options.body as string), id: 1 };
@@ -34,6 +66,107 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('Colección de palabras', () => {
+  it('crea una colección mixta, añade una palabra existente y conserva las tarjetas al quitarla', async () => {
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb' },
+      { ...words[0], id: 2, term: 'cansado', translation: 'tired', wordType: 'adjective' },
+      { ...words[0], id: 3, term: 'Buch', translation: 'book', sourceLanguage: 'de' },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'dormir' });
+    await user.click(screen.getByRole('button', { name: '+ Nueva colección' }));
+    await user.type(screen.getByLabelText('Nombre de la colección'), 'A1');
+    await user.click(screen.getByRole('button', { name: 'Crear colección' }));
+    const groups = within(screen.getByRole('group', { name: 'Colecciones' }));
+    await waitFor(() => expect(groups.getByRole('button', { name: 'A1 0' })).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.queryByRole('heading', { name: 'dormir' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Añadir palabra existente' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Añadir palabra existente: A1' }));
+    expect(dialog.getByRole('option', { name: 'dormir → sleep' })).toBeInTheDocument();
+    expect(dialog.getByRole('option', { name: 'cansado → tired' })).toBeInTheDocument();
+    expect(dialog.queryByRole('option', { name: 'Buch → book' })).not.toBeInTheDocument();
+    await user.click(dialog.getByRole('button', { name: 'Añadir a la colección' }));
+    expect(await screen.findByRole('heading', { name: 'dormir' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'cansado' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Quitar de la colección: dormir' }));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'dormir' })).not.toBeInTheDocument());
+    await user.click(groups.getByRole('button', { name: 'Todas' }));
+    expect(await screen.findByRole('heading', { name: 'dormir' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'cansado' })).toBeVisible();
+  });
+
+  it('muestra un error de exportación sin ocultar la colección', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Network error'));
+    await user.click(screen.getByRole('button', { name: 'Exportar colecciones' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron descargar las colecciones.');
+    expect(screen.getByRole('heading', { name: 'book' })).toBeVisible();
+    expect(downloadExport).not.toHaveBeenCalled();
+  });
+
+  it('exporta todas las parejas aunque la pantalla muestre solo una', async () => {
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb', englishVerbForms: { past: 'slept', ing: 'sleeping' } },
+      { ...words[0], id: 2, term: 'Buch', translation: 'libro', sourceLanguage: 'de', targetLanguage: 'es' },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'dormir' });
+    expect(screen.queryByRole('heading', { name: 'Buch' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Exportar colecciones' }));
+    await waitFor(() => expect(downloadExport).toHaveBeenCalledWith(words, collections));
+    expect(lastSearch).toBe('');
+    expect(screen.getByText('Archivo de colecciones preparado.')).toBeVisible();
+  });
+
+  it('muestra formas inglesas guardadas en la tarjeta del verbo', async () => {
+    words = [{ ...words[0], term: 'dormir', translation: 'sleep', wordType: 'verb', englishVerbForms: { past: 'slept', pastParticiple: '', ing: 'sleeping' } }];
+    render(<App />);
+    expect(await screen.findByText('sleeping')).toHaveAttribute('lang', 'en');
+    expect(screen.getByText('Pasado simple')).toBeVisible();
+    expect(screen.queryByText('Participio pasado')).not.toBeInTheDocument();
+  });
+
+  it('practica solo las palabras filtradas y oculta la respuesta hasta pedirla', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.999999);
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb' },
+      { ...words[0], id: 2, term: 'beber', translation: 'drink', wordType: 'verb' },
+      { ...words[0], id: 3, term: 'cansado', translation: 'tired', wordType: 'adjective' },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'dormir' });
+    await user.click(within(screen.getByRole('group', { name: 'Filtrar por tipo' })).getByRole('button', { name: 'Verbos' }));
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
+    await user.click(screen.getByRole('button', { name: 'Practicar' }));
+    const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
+    expect(exercise.getByRole('heading', { name: 'dormir' })).toBeVisible();
+    expect(exercise.queryByText('sleep')).not.toBeInTheDocument();
+    expect(exercise.queryByText('tired')).not.toBeInTheDocument();
+    await user.click(exercise.getByRole('button', { name: 'Mostrar respuesta' }));
+    expect(exercise.getByText('sleep')).toHaveAttribute('lang', 'en');
+    await user.click(exercise.getByRole('button', { name: 'Siguiente pregunta' }));
+    expect(exercise.getByRole('heading', { name: 'beber' })).toBeVisible();
+    expect(exercise.queryByText('drink')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Volver a las tarjetas' }));
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+  });
+
+  it('muestra la traducción debajo de su ejemplo y conserva los idiomas del contenido', async () => {
+    words[0].examples = [{ text: 'Leo un libro.', translation: 'I read a book.' }];
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByText('Leo un libro.')).toHaveAttribute('lang', 'es');
+    expect(screen.getByText('I read a book.')).toHaveAttribute('lang', 'en');
+    await user.click(screen.getByRole('button', { name: 'Editar book' }));
+    expect(screen.getByLabelText('Ejemplo 1')).toHaveValue('Leo un libro.');
+    expect(screen.getByLabelText('Traducción del ejemplo 1')).toHaveValue('I read a book.');
+  });
+
   it('filtra con los marcadores de tipo, resalta el activo y permite volver a todos sin salir de la pareja', async () => {
     words = [
       { ...words[0], id: 1, term: 'libro', translation: 'book', wordType: 'noun' },
@@ -218,8 +351,14 @@ describe('Colección de palabras', () => {
   it('traduce un error del servidor que ya estaba visible al cambiar de idioma', async () => {
     words[0].sourceLanguage = 'en';
     words[0].targetLanguage = 'es';
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Mensaje del servidor en español' }), { status: 500 }));
-    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
+    const regularFetch = vi.mocked(fetch).getMockImplementation()!;
+    let failures = 2;
+    vi.mocked(fetch).mockImplementation((url, options) => {
+      if (new URL(String(url), 'http://localhost').pathname === '/api/words' && failures-- > 0) {
+        return Promise.resolve(new Response(null, { status: 500 }));
+      }
+      return regularFetch(url, options);
+    });
     const user = userEvent.setup();
     render(<App />);
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo completar la operación.');
@@ -344,7 +483,15 @@ describe('Colección de palabras', () => {
   });
 
   it('muestra errores de conexión y permite reintentar', async () => {
-    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Network error'));
+    const regularFetch = vi.mocked(fetch).getMockImplementation()!;
+    let failOnce = true;
+    vi.mocked(fetch).mockImplementation((url, options) => {
+      if (new URL(String(url), 'http://localhost').pathname === '/api/words' && failOnce) {
+        failOnce = false;
+        return Promise.reject(new TypeError('Network error'));
+      }
+      return regularFetch(url, options);
+    });
     const user = userEvent.setup();
     render(<App />);
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar con el servidor.');

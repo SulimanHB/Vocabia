@@ -2,20 +2,31 @@ import type { UiText } from './interfaceText';
 
 export const languages = { es: 'Español', en: 'Inglés', fr: 'Francés', de: 'Alemán', it: 'Italiano', pt: 'Portugués', ja: 'Japonés' };
 export const wordTypes = { noun: 'Sustantivo', verb: 'Verbo', adjective: 'Adjetivo', adverb: 'Adverbio', expression: 'Expresión', other: 'Otro' };
+export interface Example { text: string; translation: string }
+export interface EnglishVerbForms { past?: string; pastParticiple?: string; ing?: string }
+
 export interface WordInput {
   term: string;
   translation: string;
   sourceLanguage: keyof typeof languages;
   targetLanguage: keyof typeof languages;
   wordType: keyof typeof wordTypes;
+  englishVerbForms?: EnglishVerbForms;
   notes: string;
-  examples: string[];
+  examples: Example[];
 }
-export interface Word extends WordInput { id: number }
+export interface Word extends WordInput { id: number; collectionIds?: number[] }
+export interface Collection {
+  id: number;
+  name: string;
+  sourceLanguage: WordInput['sourceLanguage'];
+  targetLanguage: WordInput['targetLanguage'];
+  wordCount: number;
+}
 
 // La API comunica el fallo; la interfaz decide en qué idioma mostrarlo.
 export class ApiError extends Error {
-  constructor(readonly messageKey: 'connectionError' | 'invalidError' | 'missingError' | 'largeError' | 'operationError') {
+  constructor(readonly messageKey: 'connectionError' | 'invalidError' | 'missingError' | 'largeError' | 'operationError' | 'duplicateError') {
     super(messageKey);
   }
 }
@@ -37,6 +48,7 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
     if (response.status === 400) throw new ApiError('invalidError');
     if (response.status === 404) throw new ApiError('missingError');
     if (response.status === 413) throw new ApiError('largeError');
+    if (response.status === 409) throw new ApiError('duplicateError');
     throw new ApiError('operationError');
   }
   return response.status === 204 ? undefined as T : response.json();
