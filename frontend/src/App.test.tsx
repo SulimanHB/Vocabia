@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import type { Collection, Word } from './model';
 import { downloadExport } from './exportWords';
+import { createExportDocument } from './exportWords';
 
-vi.mock('./exportWords', () => ({ downloadExport: vi.fn() }));
+vi.mock('./exportWords', async importOriginal => ({ ...await importOriginal<typeof import('./exportWords')>(), downloadExport: vi.fn() }));
 
 let words: Word[];
 let collections: Collection[];
 let lastSearch = '';
+let mergeBackup: { keep: Word; source: Word } | null;
 beforeEach(() => {
   vi.mocked(downloadExport).mockClear();
   localStorage.clear();
@@ -18,6 +20,7 @@ beforeEach(() => {
   HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event('close')); };
   words = [{ id: 1, term: 'book', translation: 'libro', sourceLanguage: 'es', targetLanguage: 'en', wordType: 'noun', examples: [{ text: 'A book.', translation: '' }], notes: '' }];
   collections = [];
+  mergeBackup = null;
   vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
     const path = new URL(url, 'http://localhost');
     const method = options.method ?? 'GET';
@@ -26,6 +29,10 @@ beforeEach(() => {
         (!path.searchParams.get('sourceLanguage') || collection.sourceLanguage === path.searchParams.get('sourceLanguage')) &&
         (!path.searchParams.get('targetLanguage') || collection.targetLanguage === path.searchParams.get('targetLanguage'))
       )));
+    }
+    if (path.pathname === '/api/study-rounds' && method === 'GET') return new Response(JSON.stringify([]));
+    if (path.pathname === '/api/words/merge/latest' && method === 'GET') {
+      return new Response(JSON.stringify(mergeBackup ? { id: 1, term: mergeBackup.keep.term, translation: mergeBackup.keep.translation } : null));
     }
     if (method === 'GET') {
       lastSearch = path.search;
@@ -37,6 +44,42 @@ beforeEach(() => {
         (!path.searchParams.get('wordType') || word.wordType === path.searchParams.get('wordType')) &&
         (!path.searchParams.get('collectionId') || word.collectionIds?.includes(Number(path.searchParams.get('collectionId'))))
       )));
+    }
+    if (path.pathname === '/api/import' && method === 'POST') {
+      const { document, mode } = JSON.parse(options.body as string);
+      let createdCollections = 0;
+      let reusedCollections = 0;
+      let createdWords = 0;
+      let skippedWords = 0;
+      for (const group of document.collections) {
+        if (collections.some(current => current.name.toLowerCase() === group.name.toLowerCase() && current.sourceLanguage === group.sourceLanguage && current.targetLanguage === group.targetLanguage)) reusedCollections++;
+        else { collections.push({ ...group, id: Math.max(0, ...collections.map(item => item.id)) + 1, wordCount: 0 }); createdCollections++; }
+      }
+      for (const item of document.words) {
+        if (mode === 'skipMatches' && words.some(current => current.term.toLowerCase() === item.term.toLowerCase() && current.translation.toLowerCase() === item.translation.toLowerCase() && current.sourceLanguage === item.sourceLanguage && current.targetLanguage === item.targetLanguage)) { skippedWords++; continue; }
+        const collectionIds = item.collections.map((name: string) => collections.find(group => group.name === name && group.sourceLanguage === item.sourceLanguage && group.targetLanguage === item.targetLanguage)!.id);
+        words.push({ ...item, id: Math.max(0, ...words.map(word => word.id)) + 1, collectionIds });
+        collections = collections.map(group => collectionIds.includes(group.id) ? { ...group, wordCount: group.wordCount + 1 } : group);
+        createdWords++;
+      }
+      return new Response(JSON.stringify({ createdCollections, reusedCollections, createdWords, skippedWords }), { status: 201 });
+    }
+    if (path.pathname === '/api/words/merge' && method === 'POST') {
+      const { keepId, sourceId, deleteSource, word } = JSON.parse(options.body as string);
+      const keep = words.find(item => item.id === keepId)!;
+      const source = words.find(item => item.id === sourceId)!;
+      mergeBackup = { keep: structuredClone(keep), source: structuredClone(source) };
+      Object.assign(keep, word, { collectionIds: [...new Set([...(keep.collectionIds ?? []), ...(source.collectionIds ?? [])])] });
+      if (deleteSource) words = words.filter(item => item.id !== sourceId);
+      collections = collections.map(collection => ({ ...collection, wordCount: words.filter(item => item.collectionIds?.includes(collection.id)).length }));
+      return new Response(JSON.stringify(keep));
+    }
+    if (path.pathname === '/api/words/merge/1/undo' && method === 'POST' && mergeBackup) {
+      words = words.filter(item => item.id !== mergeBackup!.keep.id && item.id !== mergeBackup!.source.id);
+      words.push(mergeBackup.keep, mergeBackup.source);
+      mergeBackup = null;
+      collections = collections.map(collection => ({ ...collection, wordCount: words.filter(item => item.collectionIds?.includes(collection.id)).length }));
+      return new Response(JSON.stringify({ restored: true }));
     }
     if (path.pathname === '/api/collections' && method === 'POST') {
       const collection = { ...JSON.parse(options.body as string), id: collections.length + 1, wordCount: 0 };
@@ -57,7 +100,13 @@ beforeEach(() => {
       words.forEach(word => { word.collectionIds = word.collectionIds?.filter(collectionId => collectionId !== id); });
       return new Response(null, { status: 204 });
     }
-    if (method === 'POST') words.push({ ...JSON.parse(options.body as string), id: 2 });
+    if (method === 'POST') {
+      const collectionId = path.searchParams.get('collectionId');
+      const created = { ...JSON.parse(options.body as string), id: Math.max(0, ...words.map(word => word.id)) + 1, collectionIds: collectionId ? [Number(collectionId)] : [] };
+      words.push(created);
+      if (collectionId) collections = collections.map(collection => collection.id === Number(collectionId) ? { ...collection, wordCount: collection.wordCount + 1 } : collection);
+      return new Response(JSON.stringify(created), { status: 201 });
+    }
     if (method === 'PUT') words[0] = { ...JSON.parse(options.body as string), id: 1 };
     if (method === 'DELETE') { words = words.filter(word => word.id !== Number(path.pathname.split('/').pop())); return new Response(null, { status: 204 }); }
     return new Response(JSON.stringify(words.at(-1)));
@@ -66,6 +115,125 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('Colección de palabras', () => {
+  it('muestra coincidencias de A1 y A2 con sus ejemplos sin modificar tarjetas', async () => {
+    collections = [
+      { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+      { id: 2, name: 'A2', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+    ];
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', collectionIds: [1], examples: [{ text: 'Quiero dormir.', translation: 'I want to sleep.' }] },
+      { ...words[0], id: 2, term: 'Dormir', translation: 'SLEEP', collectionIds: [2], examples: [{ text: 'Duermo.', translation: 'I sleep.' }] },
+      { ...words[0], id: 3, term: 'dormir', translation: 'to rest', collectionIds: [] },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Buscar coincidencias' }));
+    const matches = within(screen.getByRole('region', { name: 'Posibles coincidencias' }));
+    expect(await matches.findByText('Grupos encontrados: 1')).toBeVisible();
+    expect(matches.getByText('Quiero dormir.')).toBeVisible();
+    expect(matches.getByText('Duermo.')).toBeVisible();
+    expect(matches.getByText('A1')).toBeVisible();
+    expect(matches.getByText('A2')).toBeVisible();
+    expect(matches.queryByText('to rest')).not.toBeInTheDocument();
+    expect(words).toHaveLength(3);
+    expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method && options.method !== 'GET')).toHaveLength(0);
+  });
+
+  it('permite preparar y confirmar una fusión con ejemplos, notas, formas y ambas colecciones', async () => {
+    collections = [
+      { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+      { id: 2, name: 'A2', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+    ];
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb', notes: 'Nota A1',
+        collectionIds: [1], examples: [{ text: 'Duermo.', translation: 'I sleep.' }], englishVerbForms: { past: 'slept', ing: '' } },
+      { ...words[0], id: 2, term: 'dormir', translation: 'sleep', wordType: 'verb', notes: 'Nota A2',
+        collectionIds: [2], examples: [{ text: 'Quiero dormir.', translation: 'I want to sleep.' }], englishVerbForms: { ing: 'sleeping' } },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Buscar coincidencias' }));
+    const matches = within(screen.getByRole('region', { name: 'Posibles coincidencias' }));
+    await user.click(await matches.findByRole('button', { name: 'Preparar fusión' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Preparar fusión de tarjetas' }));
+    await user.click(dialog.getByRole('button', { name: 'Añadir' }));
+    const result = within(dialog.getByRole('region', { name: 'Vista previa del resultado' }));
+    expect(result.getByText('Duermo.')).toBeVisible();
+    expect(result.getByText('Quiero dormir.')).toBeVisible();
+    await user.click(dialog.getByRole('button', { name: 'Unir notas' }));
+    expect(dialog.getByLabelText('Notas')).toHaveValue('Nota A1\nNota A2');
+    await user.click(dialog.getByRole('button', { name: 'Usar de la segunda: sleeping' }));
+    await user.click(dialog.getByRole('checkbox', { name: 'Eliminar la segunda tarjeta después de fusionar' }));
+    await user.click(dialog.getByRole('button', { name: 'Revisar antes de guardar' }));
+    expect(dialog.getByText(/La segunda tarjeta se eliminará/)).toBeVisible();
+    expect(words).toHaveLength(2);
+    await user.click(dialog.getByRole('button', { name: 'Confirmar fusión' }));
+    await waitFor(() => expect(words).toHaveLength(1));
+    expect(words[0]).toMatchObject({ id: 1, notes: 'Nota A1\nNota A2', collectionIds: [1, 2],
+      examples: [{ text: 'Duermo.', translation: 'I sleep.' }, { text: 'Quiero dormir.', translation: 'I want to sleep.' }],
+      englishVerbForms: { past: 'slept', ing: 'sleeping' } });
+    expect(await matches.findByText('No hay coincidencias en esta pareja.')).toBeVisible();
+  });
+
+  it('muestra las dos tarjetas completas y permite unirlas directamente en la vista previa', async () => {
+    collections = [
+      { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+      { id: 2, name: 'A2', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+    ];
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb', notes: 'Nota A1',
+        collectionIds: [1], examples: [{ text: 'Duermo.', translation: 'I sleep.' }], englishVerbForms: { past: 'slept' } },
+      { ...words[0], id: 2, term: 'dormir', translation: 'sleep', wordType: 'verb', notes: 'Nota A2',
+        collectionIds: [2], examples: [{ text: 'Quiero dormir.', translation: 'I want to sleep.' }], englishVerbForms: { ing: 'sleeping' } },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Buscar coincidencias' }));
+    await user.click(await screen.findByRole('button', { name: 'Preparar fusión' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Preparar fusión de tarjetas' }));
+    const first = within(dialog.getByRole('region', { name: 'Tarjeta A · base del resultado' }));
+    const second = within(dialog.getByRole('region', { name: 'Tarjeta B · para unir' }));
+    expect(first.getByText('Nota A1')).toBeVisible();
+    expect(first.getByText('slept')).toBeVisible();
+    expect(second.getByText('Nota A2')).toBeVisible();
+    expect(second.getByText('sleeping')).toBeVisible();
+    await user.click(dialog.getByRole('button', { name: 'Unir ambas en el resultado' }));
+    const result = within(dialog.getByRole('region', { name: 'Vista previa del resultado' }));
+    expect(result.getByText('Duermo.')).toBeVisible();
+    expect(result.getByText('Quiero dormir.')).toBeVisible();
+    expect(result.getByLabelText('Notas')).toHaveValue('Nota A1\nNota A2');
+    expect(result.getByLabelText('Forma -ing')).toHaveValue('sleeping');
+    expect(dialog.getByRole('checkbox', { name: 'Eliminar la segunda tarjeta después de fusionar' })).toBeChecked();
+    expect(words).toHaveLength(2);
+    await user.click(dialog.getByRole('button', { name: 'Revisar antes de guardar' }));
+    await user.click(dialog.getByRole('button', { name: 'Confirmar fusión' }));
+    await waitFor(() => expect(words).toHaveLength(1));
+    expect(words[0]).toMatchObject({ id: 1, collectionIds: [1, 2], notes: 'Nota A1\nNota A2',
+      examples: [{ text: 'Duermo.', translation: 'I sleep.' }, { text: 'Quiero dormir.', translation: 'I want to sleep.' }],
+      englishVerbForms: { past: 'slept', ing: 'sleeping' } });
+  });
+
+  it('permite deshacer la última fusión y recuperar las dos tarjetas', async () => {
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', notes: 'A1', examples: [{ text: 'Duermo.', translation: 'I sleep.' }] },
+      { ...words[0], id: 2, term: 'dormir', translation: 'sleep', notes: 'A2', examples: [{ text: 'Dormí.', translation: 'I slept.' }] },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Buscar coincidencias' }));
+    await user.click(await screen.findByRole('button', { name: 'Preparar fusión' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Preparar fusión de tarjetas' }));
+    await user.click(dialog.getByRole('button', { name: 'Unir ambas en el resultado' }));
+    await user.click(dialog.getByRole('button', { name: 'Revisar antes de guardar' }));
+    await user.click(dialog.getByRole('button', { name: 'Confirmar fusión' }));
+    await waitFor(() => expect(words).toHaveLength(1));
+    await user.click(await screen.findByRole('button', { name: 'Deshacer última fusión: dormir → sleep' }));
+    await waitFor(() => expect(words).toHaveLength(2));
+    expect(words[0].notes).toBe('A1');
+    expect(words[1].notes).toBe('A2');
+    expect(await screen.findByText('Fusión deshecha. Las tarjetas originales se han recuperado.')).toBeVisible();
+  });
+
   it('crea una colección mixta, añade una palabra existente y conserva las tarjetas al quitarla', async () => {
     words = [
       { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb' },
@@ -87,13 +255,34 @@ describe('Colección de palabras', () => {
     expect(dialog.getByRole('option', { name: 'cansado → tired' })).toBeInTheDocument();
     expect(dialog.queryByRole('option', { name: 'Buch → book' })).not.toBeInTheDocument();
     await user.click(dialog.getByRole('button', { name: 'Añadir a la colección' }));
-    expect(await screen.findByRole('heading', { name: 'dormir' })).toBeVisible();
+    await waitFor(() => expect(groups.getByRole('button', { name: 'A1 1' })).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Quitar de la colección: dormir' })).toBeEnabled());
     expect(screen.queryByRole('heading', { name: 'cansado' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Quitar de la colección: dormir' }));
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'dormir' })).not.toBeInTheDocument());
     await user.click(groups.getByRole('button', { name: 'Todas' }));
     expect(await screen.findByRole('heading', { name: 'dormir' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'cansado' })).toBeVisible();
+  });
+
+  it('añade una palabra nueva a la colección activa y también la muestra en Todas', async () => {
+    collections = [{ id: 7, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 0 }];
+    words = [];
+    const user = userEvent.setup();
+    render(<App />);
+    const groups = within(screen.getByRole('group', { name: 'Colecciones' }));
+    await user.click(await groups.findByRole('button', { name: 'A1 0' }));
+    await user.click(screen.getByRole('button', { name: 'Añadir palabra' }));
+    await user.type(screen.getByLabelText('Palabra o expresión *'), 'dormir');
+    await user.type(screen.getByLabelText('Traducción *'), 'sleep');
+    await user.type(screen.getByLabelText('Ejemplo 1'), 'Quiero dormir.');
+    await user.click(screen.getByRole('button', { name: 'Guardar palabra' }));
+    expect(await screen.findByRole('heading', { name: 'dormir' })).toBeVisible();
+    expect(groups.getByRole('button', { name: 'A1 1' })).toHaveAttribute('aria-pressed', 'true');
+    const createCall = vi.mocked(fetch).mock.calls.find(([url, options]) => String(url).startsWith('/api/words?collectionId=') && options?.method === 'POST');
+    expect(createCall?.[0]).toBe('/api/words?collectionId=7');
+    await user.click(groups.getByRole('button', { name: 'Todas' }));
+    expect(await screen.findByRole('heading', { name: 'dormir' })).toBeVisible();
   });
 
   it('muestra un error de exportación sin ocultar la colección', async () => {
@@ -120,6 +309,126 @@ describe('Colección de palabras', () => {
     await waitFor(() => expect(downloadExport).toHaveBeenCalledWith(words, collections));
     expect(lastSearch).toBe('');
     expect(screen.getByText('Archivo de colecciones preparado.')).toBeVisible();
+  });
+
+  it('previsualiza un JSON exportado sin enviar datos ni cambiar las tarjetas', async () => {
+    collections = [{ id: 5, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 }];
+    words[0].collectionIds = [5];
+    const content = JSON.stringify(createExportDocument(words, collections, new Date('2026-10-28T10:00:00.000Z')));
+    const file = new File([content], 'vocabia-colecciones.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    await user.click(screen.getByRole('button', { name: 'Previsualizar importación' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Revisar un archivo' }));
+    await user.upload(dialog.getByLabelText('Archivo JSON'), file);
+    expect(await dialog.findByText('vocabia-colecciones.json')).toBeVisible();
+    expect(dialog.getByRole('heading', { name: 'Colecciones 1' })).toBeVisible();
+    expect(dialog.getByRole('heading', { name: 'Palabras 1' })).toBeVisible();
+    const comparison = within(await dialog.findByRole('region', { name: 'Comparación con tus datos' }));
+    expect(comparison.getByText('Colecciones existentes:', { exact: false })).toHaveTextContent('1');
+    expect(comparison.getByText('Posibles coincidencias:', { exact: false })).toHaveTextContent('1');
+    expect(dialog.getByText('Solo vista previa:', { exact: false })).toBeVisible();
+    expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method && options.method !== 'GET')).toHaveLength(0);
+    expect(screen.getByRole('heading', { name: 'book' })).toBeVisible();
+  });
+
+  it('confirma la importación omitiendo coincidencias y refresca las tarjetas', async () => {
+    const group: Collection = { id: 7, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 2 };
+    const newWord: Word = { ...words[0], id: 8, term: 'casa', translation: 'house', collectionIds: [7] };
+    const savedWord: Word = { ...words[0], collectionIds: [7] };
+    const content = JSON.stringify(createExportDocument([savedWord, newWord], [group], new Date('2026-10-28T10:00:00.000Z')));
+    const file = new File([content], 'mis-palabras.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    await user.click(screen.getByRole('button', { name: 'Previsualizar importación' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Revisar un archivo' }));
+    await user.upload(dialog.getByLabelText('Archivo JSON'), file);
+    await dialog.findByRole('region', { name: 'Comparación con tus datos' });
+    expect(dialog.getByRole('radio', { name: 'Importarlas igualmente (predeterminado)' })).toBeChecked();
+    await user.click(dialog.getByRole('radio', { name: 'Omitirlas' }));
+    await user.click(dialog.getByRole('button', { name: 'Confirmar importación' }));
+    expect(await dialog.findByRole('heading', { name: 'Importación completada' })).toBeVisible();
+    expect(dialog.getByText('Palabras creadas: 1', { exact: false })).toBeVisible();
+    expect(dialog.getByText('Palabras omitidas: 1', { exact: false })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'casa' })).toBeVisible();
+    expect(words.filter(item => item.term === 'book')).toHaveLength(1);
+    const importCall = vi.mocked(fetch).mock.calls.find(([url, options]) => url === '/api/import' && options?.method === 'POST');
+    expect(JSON.parse(importCall![1]!.body as string).mode).toBe('skipMatches');
+  });
+
+  it('permite importar igualmente una coincidencia si el usuario lo elige', async () => {
+    const content = JSON.stringify(createExportDocument(words, [], new Date('2026-10-28T10:00:00.000Z')));
+    const file = new File([content], 'otra-acepcion.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    await user.click(screen.getByRole('button', { name: 'Previsualizar importación' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Revisar un archivo' }));
+    await user.upload(dialog.getByLabelText('Archivo JSON'), file);
+    await dialog.findByRole('region', { name: 'Comparación con tus datos' });
+    expect(dialog.getByRole('radio', { name: 'Importarlas igualmente (predeterminado)' })).toBeChecked();
+    await user.click(dialog.getByRole('button', { name: 'Confirmar importación' }));
+    expect(await dialog.findByRole('heading', { name: 'Importación completada' })).toBeVisible();
+    expect(words.filter(item => item.term === 'book')).toHaveLength(2);
+    const importCall = vi.mocked(fetch).mock.calls.find(([url, options]) => url === '/api/import' && options?.method === 'POST');
+    expect(JSON.parse(importCall![1]!.body as string).mode).toBe('includeMatches');
+  });
+
+  it('evita repetir a ciegas una importación si se pierde la respuesta del servidor', async () => {
+    const content = JSON.stringify(createExportDocument(words, [], new Date('2026-10-28T10:00:00.000Z')));
+    const file = new File([content], 'respaldo.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    await user.click(screen.getByRole('button', { name: 'Previsualizar importación' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Revisar un archivo' }));
+    await user.upload(dialog.getByLabelText('Archivo JSON'), file);
+    await dialog.findByRole('region', { name: 'Comparación con tus datos' });
+    const normalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((url, options) =>
+      url === '/api/import' && options?.method === 'POST' ? Promise.reject(new TypeError('Sin conexión')) : normalFetch(url, options));
+    await user.click(dialog.getByRole('button', { name: 'Confirmar importación' }));
+    expect(await dialog.findByRole('alert')).toHaveTextContent('Revisa tus tarjetas antes de repetir');
+    expect(dialog.getByRole('button', { name: 'Confirmar importación' })).toBeDisabled();
+    expect(words).toHaveLength(1);
+  });
+
+  it('rechaza un JSON dañado sin alterar las palabras guardadas', async () => {
+    const file = new File(['{'], 'dañado.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve('{') });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    await user.click(screen.getByRole('button', { name: 'Previsualizar importación' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Revisar un archivo' }));
+    await user.upload(dialog.getByLabelText('Archivo JSON'), file);
+    expect(await dialog.findByRole('alert')).toHaveTextContent('El archivo no contiene un JSON válido.');
+    expect(screen.getByRole('heading', { name: 'book' })).toBeVisible();
+    expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method && options.method !== 'GET')).toHaveLength(0);
+  });
+
+  it('conserva la vista previa y permite reintentar si falla la consulta de comparación', async () => {
+    const content = JSON.stringify(createExportDocument(words, [], new Date('2026-10-28T10:00:00.000Z')));
+    const file = new File([content], 'respaldo.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Sin conexión'));
+    await user.click(screen.getByRole('button', { name: 'Previsualizar importación' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Revisar un archivo' }));
+    await user.upload(dialog.getByLabelText('Archivo JSON'), file);
+    expect(await dialog.findByRole('alert')).toHaveTextContent('La vista previa sigue disponible.');
+    expect(dialog.getByText('respaldo.json')).toBeVisible();
+    await user.click(dialog.getByRole('button', { name: 'Reintentar' }));
+    expect(await dialog.findByRole('region', { name: 'Comparación con tus datos' })).toBeVisible();
+    expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method && options.method !== 'GET')).toHaveLength(0);
   });
 
   it('muestra formas inglesas guardadas en la tarjeta del verbo', async () => {

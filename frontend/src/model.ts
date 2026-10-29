@@ -23,6 +23,15 @@ export interface Collection {
   targetLanguage: WordInput['targetLanguage'];
   wordCount: number;
 }
+export interface StudyRound {
+  id: number;
+  sourceLanguage: WordInput['sourceLanguage'];
+  targetLanguage: WordInput['targetLanguage'];
+  questionCount: number;
+  writtenCount: number;
+  matchedCount: number;
+  completedAt: string;
+}
 
 // La API comunica el fallo; la interfaz decide en qué idioma mostrarlo.
 export class ApiError extends Error {

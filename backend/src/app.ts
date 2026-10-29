@@ -1,15 +1,21 @@
 import express, { type ErrorRequestHandler } from 'express';
 import type { Database } from './database.js';
-import { filtersSchema, wordSchema } from './validation.js';
+import { filtersSchema, wordCreationFiltersSchema, wordSchema } from './validation.js';
 import { createCollectionsRouter } from './collections.js';
+import { createImportRouter } from './importWords.js';
+import { createStudyRoundsRouter } from './studyRounds.js';
+import { createMergeRouter } from './mergeWords.js';
 
 const columns = `id, term, translation, source_language AS "sourceLanguage", target_language AS "targetLanguage", word_type AS "wordType", notes, examples, english_verb_forms AS "englishVerbForms"`;
 
 export function createApp(db: Database) {
   const app = express();
   app.disable('x-powered-by');
+  app.use('/api/import', express.json({ limit: '3mb' }), createImportRouter(db));
   app.use(express.json({ limit: '32kb' }));
   app.use('/api/collections', createCollectionsRouter(db));
+  app.use('/api/study-rounds', createStudyRoundsRouter(db));
+  app.use('/api/words/merge', createMergeRouter(db));
 
   app.get('/api/words', async (req, res) => {
     const parsed = filtersSchema.safeParse(req.query);
@@ -32,12 +38,25 @@ export function createApp(db: Database) {
   });
 
   app.post('/api/words', async (req, res) => {
+    const creationFilters = wordCreationFiltersSchema.safeParse(req.query);
+    if (!creationFilters.success) { res.status(400).json({ error: 'La colección indicada no es válida.' }); return; }
     const parsed = wordSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'Revisa los campos: palabra, traducción, idiomas distintos y entre 1 y 10 ejemplos.', details: parsed.error.flatten() }); return; }
     const w = parsed.data;
-    const result = await db.query(`INSERT INTO words(term,translation,source_language,target_language,word_type,notes,examples,english_verb_forms)
-      VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb) RETURNING ${columns}`,
-      [w.term, w.translation, w.sourceLanguage, w.targetLanguage, w.wordType, w.notes, JSON.stringify(w.examples), JSON.stringify(w.englishVerbForms ?? {})]);
+    // Las dos inserciones forman una sola instrucción: una colección inválida no deja una palabra huérfana.
+    const result = await db.query(`WITH inserted AS (
+      INSERT INTO words(term,translation,source_language,target_language,word_type,notes,examples,english_verb_forms)
+      SELECT $1::text,$2::text,$3::text,$4::text,$5::text,$6::text,$7::jsonb,$8::jsonb
+      WHERE $9::integer IS NULL OR EXISTS (
+        SELECT 1 FROM collections WHERE id=$9 AND source_language=$3::text AND target_language=$4::text
+      ) RETURNING ${columns}
+    ), linked AS (
+      INSERT INTO collection_words(collection_id,word_id)
+      SELECT $9::integer, id FROM inserted WHERE $9::integer IS NOT NULL
+      RETURNING collection_id
+    ) SELECT * FROM inserted`,
+      [w.term, w.translation, w.sourceLanguage, w.targetLanguage, w.wordType, w.notes, JSON.stringify(w.examples), JSON.stringify(w.englishVerbForms ?? {}), creationFilters.data.collectionId ?? null]);
+    if (!result.rows.length) { res.status(400).json({ error: 'La colección no existe o pertenece a otra pareja de idiomas.' }); return; }
     res.status(201).json(result.rows[0]);
   });
 

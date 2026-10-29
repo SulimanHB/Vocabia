@@ -25,23 +25,37 @@ Referencia: [Vite](https://vite.dev/guide/) y [PGlite](https://pglite.dev/docs/)
 - Colección limitada a la pareja exacta de idiomas seleccionada, combinable con búsqueda y filtro por tipo.
 - Colecciones personalizadas, por ejemplo «A1» o «Importantes», para reunir palabras de distintos tipos dentro de esa pareja.
 - Exportación JSON de la colección completa para conservar una copia del vocabulario.
-- Práctica básica: preguntas mezcladas por rondas sobre traducciones y formas inglesas guardadas, con respuesta oculta y opción de escribirla.
+- Importación de un JSON exportado, con vista previa, comparación de coincidencias y confirmación antes de guardar.
+- Búsqueda de posibles coincidencias entre tarjetas de distintas colecciones de la pareja seleccionada, sin cambios automáticos.
+- Práctica básica: preguntas mezcladas por rondas sobre traducciones, formas inglesas y ejemplos traducidos, con respuesta oculta y opción de escribirla. Historial de las últimas cinco rondas por pareja de idiomas.
 - Interfaz traducida a los siete idiomas disponibles, adaptable a móvil, con diálogos nativos y etiquetas de formulario. Las tarjetas conservan su contenido y sus etiquetas.
 - Estados de carga, colección vacía, errores y mensajes de éxito.
 - Seis entradas ficticias de demostración, cargadas una sola vez. Borrarlas no las repone al reiniciar.
 - Idiomas iniciales: español, inglés, francés, alemán, italiano, portugués y japonés. Se pueden añadir más ampliando los catálogos del backend y frontend.
 
-La aplicación permite guardar palabras repetidas: una misma palabra puede tener distintos significados o contextos. Las formas inglesas se guardan manualmente y ya pueden practicarse; todavía no hay seguimiento del estudio.
+La aplicación permite guardar palabras repetidas: una misma palabra puede tener distintos significados o contextos. Las formas inglesas se guardan manualmente y ya pueden practicarse. El historial conserva totales por ronda, sin calificar respuestas alternativas ni medir dominio de cada palabra.
 
 ### Colecciones personalizadas
 
 **Tipo de palabra** describe qué es una entrada (verbo, adjetivo…). Una **colección** es una agrupación que eliges tú: «A1» puede contener `dormir → sleep` y `cansado → tired` aunque tengan tipos distintos. La misma tarjeta puede estar también en «Importantes», sin duplicar sus datos.
 
-Selecciona una pareja, pulsa **Nueva colección**, escribe el nombre y créala. Con la colección seleccionada, usa **Añadir palabra existente** para incorporar tarjetas de esa pareja. El selector **Todas** muestra de nuevo todas las tarjetas. La búsqueda y el filtro por tipo siguen funcionando dentro de la colección; **Practicar** usa las tarjetas que se ven. **Quitar de la colección** desvincula una tarjeta, pero la deja en **Todas**. **Eliminar colección** pide confirmación y conserva todas sus palabras. Si creas una palabra nueva mientras ves una colección, se guarda en **Todas**; después puedes añadirla a la colección.
+Selecciona una pareja, pulsa **Nueva colección**, escribe el nombre y créala. Con la colección seleccionada, usa **Añadir palabra existente** para incorporar tarjetas de esa pareja. Si pulsas **Añadir palabra** y mantienes esa pareja de idiomas en el formulario, la nueva tarjeta entra directamente en la colección y también aparece en **Todas**. Si cambias su pareja en el formulario, se guarda en la pareja nueva, fuera de la colección actual. El selector **Todas** muestra de nuevo todas las tarjetas. La búsqueda y el filtro por tipo siguen funcionando dentro de la colección; **Practicar** usa las tarjetas que se ven. **Quitar de la colección** desvincula una tarjeta, pero la deja en **Todas**. **Eliminar colección** pide confirmación y conserva todas sus palabras.
 
 Cada colección pertenece a una pareja ordenada: Español → Inglés y Alemán → Inglés tienen colecciones diferentes. Los nombres se pueden repetir en parejas distintas, pero no dos veces en la misma pareja aunque cambies mayúsculas. Por ahora no se pueden renombrar colecciones. El nivel «A1» es solo un nombre que pones tú; la aplicación no asigna niveles automáticamente.
 
+Debajo de las colecciones, **Buscar coincidencias** consulta las tarjetas de la pareja seleccionada y agrupa las que tienen la misma palabra y traducción, sin distinguir mayúsculas ni espacios al principio o al final. Muestra a qué colecciones pertenece cada tarjeta, sus notas y sus ejemplos. Por ejemplo, `dormir → sleep` puede aparecer en A1 y A2 con frases distintas. La coincidencia es una pista, no una orden para fusionar: tampoco considera equivalentes traducciones diferentes. Una misma tarjeta puede estar vinculada a ambas colecciones sin duplicarla; la importación de tarjetas separadas también puede dejar dos registros coincidentes.
+
+Pulsa **Preparar fusión** dentro de un grupo. Elige la **tarjeta A**, que sirve de base e identifica el resultado, y la **tarjeta B**, que se incorporará. Compara sus datos completos en dos columnas: palabra, traducción, colección, tipo, ejemplos, notas y, si corresponde, formas verbales. La tercera columna es la **vista previa editable** de la tarjeta resultante. Los ejemplos de B se pueden arrastrar a una posición del resultado o incorporar con **Añadir**, que funciona en móvil y con teclado; también puedes quitarlos o reordenarlos. Las notas y cada forma verbal se editan en la vista previa. La tarjeta resultante reúne las colecciones de ambas.
+
+**Unir ambas en el resultado** añade de una vez los ejemplos distintos y las notas de las dos tarjetas, y toma cada forma verbal disponible. Si una forma tiene valores diferentes, conserva inicialmente el de la primera tarjeta y avisa para que lo revises. También marca la eliminación de la segunda tarjeta, pero no guarda nada hasta que confirmes. Si la unión supera el máximo de 10 ejemplos o 2000 caracteres de notas, se detiene y tendrás que elegir el contenido manualmente.
+
+**Revisar antes de guardar** muestra una confirmación. Si preparas la fusión manualmente, la segunda tarjeta se conserva por defecto: la primera recibe los datos elegidos y se vincula a las colecciones de ambas. Si marcas **Eliminar la segunda tarjeta después de fusionar** o pulsas **Unir ambas en el resultado**, se borrará solo al confirmar; cualquier ejemplo, nota o forma de esa segunda tarjeta que no hayas elegido dejará de estar disponible. El servidor comprueba que ambas tarjetas sigan teniendo la misma pareja, palabra y traducción y guarda la actualización, las relaciones y la posible eliminación en una **transacción**: si falla una parte, se revierte todo.
+
+Después de fusionar, **Deshacer última fusión** aparece en **Buscar coincidencias** para esa pareja de idiomas. Recupera el contenido y las colecciones originales de ambas tarjetas; si B se había eliminado, vuelve con su mismo identificador. El historial queda en la base de datos local, por lo que el botón sigue disponible tras reiniciar. El servidor rechaza la recuperación si una de las tarjetas cambió después o si falta alguna colección original: así no pisa trabajo posterior. Una fusión deshecha no se puede volver a deshacer. La migración `006_merge_history.sql` crea la tabla de historial al arrancar; no cambia las tarjetas actuales. La exportación JSON de vocabulario no incluye este historial, así que conviene conservar una copia de los datos importantes antes de importar o cambiar de equipo.
+
 La migración `004_collections.sql` añade `collections` y `collection_words`. Esta segunda tabla guarda la relación entre tarjetas y colecciones; una tarjeta puede aparecer en varias. Al borrar una tarjeta se limpian sus relaciones; al cambiar sus idiomas, se retira de las colecciones de la pareja anterior. La migración no modifica las palabras existentes. Antes de actualizar una base con datos importantes, conserva una copia de `backend/data/` con el servidor detenido.
+
+Al crear una palabra desde una colección, la API recibe su `collectionId` opcional. Comprueba que exista y que coincidan ambos idiomas. La palabra y su pertenencia se insertan en una sola instrucción SQL: si la colección ya no existe o la pareja no coincide, no se guarda una palabra suelta por accidente. Crear desde **Todas** sigue usando la petición de siempre.
 
 **Qué conviene entender:** la palabra y la colección viven en tablas distintas. `collection_words` guarda pares de identificadores para relacionarlas; por eso una palabra puede estar en «A1» y «Importantes» a la vez. El filtro de colección se suma a los de búsqueda y tipo: las condiciones deben cumplirse juntas. El frontend solicita los datos a la API y muestra el resultado, mientras la base mantiene la pertenencia aunque cierres la página.
 
@@ -59,17 +73,44 @@ Para probarlo: crea `dormir → sleep`, selecciona **Verbo** e **Inglés** como 
 
 La palabra y su traducción tienen ahora un tamaño parecido y una flecha muestra la dirección, por ejemplo **dormir → sleep**. Los filtros de tipo usan los mismos colores que las tarjetas. El filtro seleccionado se distingue también por su relleno y por `aria-pressed`; el nombre del tipo sigue visible. Los botones **Editar** y **Borrar** incluyen texto, un símbolo y una zona de pulsación mayor. El borrado conserva su confirmación.
 
-Pulsa **Practicar** cuando haya palabras en la pareja seleccionada. Se preparan preguntas con las palabras que cumplen la búsqueda y el filtro de tipo actuales. Cada tarjeta aporta una pregunta por su traducción principal. Si es un verbo traducido al inglés, aporta además una pregunta por cada forma guardada: pasado simple, participio pasado y forma `-ing`. Un verbo antiguo sin formas sigue aportando solo la pregunta de traducción. Las preguntas se mezclan al comenzar cada ronda y no se repite ninguna pregunta dentro de ella. Una misma palabra puede aparecer varias veces con etiquetas distintas. Piensa la respuesta y elige **Mostrar respuesta** o **Escribir respuesta**. Después pasa a la siguiente pregunta; al terminar puedes iniciar **Nueva ronda**, con otra mezcla. **Volver a las tarjetas** recupera la lista. Por ejemplo, `dormir → sleep` con `slept` y `sleeping` guardados produce tres preguntas: traducción, pasado simple y forma `-ing`.
+Pulsa **Practicar** cuando haya palabras en la pareja seleccionada. Se preparan preguntas con las palabras que cumplen la búsqueda y el filtro de tipo actuales. Cada tarjeta aporta una pregunta por su traducción principal. Si es un verbo traducido al inglés, aporta además una pregunta por cada forma guardada: pasado simple, participio pasado y forma `-ing`. Un verbo antiguo sin formas sigue aportando solo la pregunta de traducción. Las preguntas se mezclan al comenzar cada ronda y no se repite ninguna pregunta dentro de ella. Una misma palabra puede aparecer varias veces con etiquetas distintas. Piensa la respuesta y elige **Mostrar respuesta** o **Escribir respuesta**. Después pasa a la siguiente pregunta; al terminar pulsa **Ver resumen** y desde allí puedes iniciar **Nueva ronda**, con otra mezcla. **Volver a las tarjetas** recupera la lista. Por ejemplo, `dormir → sleep` con `slept` y `sleeping` guardados produce tres preguntas: traducción, pasado simple y forma `-ing`.
 
-Al escribir, **Comprobar** compara tu texto con la respuesta guardada para esa pregunta, ignorando mayúsculas, espacios sobrantes y diferencias de composición Unicode. Conserva tildes y otros caracteres que pueden distinguir palabras. Si coincide, aparece un **✓** y el mensaje «¡Correcto!»; si difiere, un aviso ámbar. Ambos estados tienen texto además de color. Una respuesta distinta puede ser válida en otro contexto: el mensaje indica únicamente que no coincide con la respuesta guardada y muestra esta última. No hay puntuación ni seguimiento persistente. La respuesta no se inserta en el HTML hasta que la pides o compruebas tu intento. `StudyMode.tsx` mantiene con `useState` la mezcla, la posición, el texto escrito y si se ha revelado; esos datos solo existen mientras está abierto el ejercicio. La mezcla usa Fisher–Yates sobre una copia de las preguntas para visitarlas una vez por ronda. La API y la base de datos no cambian por esta función.
+Al escribir, **Comprobar** compara tu texto con la respuesta guardada para esa pregunta, ignorando mayúsculas, espacios sobrantes y diferencias de composición Unicode. Conserva tildes y otros caracteres que pueden distinguir palabras. Si coincide, aparece un **✓** y el mensaje «¡Correcto!»; si difiere, un aviso ámbar. Ambos estados tienen texto además de color. Una respuesta distinta puede ser válida en otro contexto: el mensaje indica únicamente que no coincide con la respuesta guardada y muestra esta última. La respuesta no se inserta en el HTML hasta que la pides o compruebas tu intento. `StudyMode.tsx` mantiene con `useState` la mezcla, la posición, el texto escrito y si se ha revelado; esos datos solo existen mientras está abierto el ejercicio. La mezcla usa Fisher–Yates sobre una copia de las preguntas para visitarlas una vez por ronda. Las preguntas y la comparación se calculan en el frontend; solo el resumen final se envía a la API.
+
+Al acabar, el resumen muestra **preguntas repasadas**, **respuestas escritas** y **coincidencias con las respuestas guardadas**. Si solo pulsas **Mostrar respuesta**, repasas la pregunta pero no cuenta como intento escrito. La siguiente ronda empieza con los contadores a cero. Como otra traducción también puede ser válida, una falta de coincidencia no equivale necesariamente a un error de idioma.
+
+### Historial de rondas
+
+Al pulsar **Ver resumen**, la aplicación guarda automáticamente esos tres totales y la fecha en la base local. Debajo del ejercicio aparecen las **cinco rondas más recientes** de la pareja de idiomas seleccionada, también al volver a **Practicar** después de cerrar la página. El historial reúne las rondas de esa pareja aunque hayas usado colecciones o filtros distintos; no guarda qué palabras concretas salieron ni lo que escribiste. Si se pierde la conexión justo después de enviar el resumen, el navegador no puede saber si se guardó: muestra un aviso y conviene consultar el historial antes de repetir la ronda. El resumen sigue visible aunque falle el guardado.
+
+`005_study_rounds.sql` crea una tabla separada. Comprueba que las respuestas escritas no superen las preguntas y que las coincidencias no superen las escritas. La migración se aplica al arrancar y no modifica tarjetas ni colecciones. Si ya tienes datos importantes en `backend/data/`, conserva una copia con el servidor detenido antes de actualizar. Este historial pertenece a la base local compartida: todavía no hay cuentas, sincronización entre dispositivos ni estadísticas por palabra. La exportación JSON de vocabulario **no incluye** el historial de estudio.
+
+Para probarlo, termina una ronda, anota los tres totales, sal de **Practicar** y vuelve a entrar en la misma pareja: la ronda debe aparecer en **Rondas recientes**. Cambia de pareja y comprueba que sus rondas se muestran por separado. Para entender el cambio, sigue el recorrido **estado de React → POST `/api/study-rounds` → validación → INSERT SQL → GET del historial**.
+
+Cada ejemplo que tenga frase y traducción guardadas añade otra pregunta de **Frase completa**. Por ejemplo, `Quiero dormir. → I want to sleep.` se practica aparte de `dormir → sleep`. Los ejemplos sin traducción no generan preguntas que no se puedan comprobar. Puedes escribir hasta 500 caracteres para responder a una frase; se usa la misma comparación que en las palabras. Esto repasa exactamente lo que guardaste: no evalúa otras traducciones posibles ni corrige la gramática por sí solo.
 
 ### Exportar la colección
 
 Pulsa **Exportar colecciones** junto a **Añadir palabra**. El navegador descargará un archivo `vocabia-colecciones-AAAA-MM-DD.json` con **todas** las parejas de idiomas, incluso las que no aparecen por la selección, la búsqueda o el filtro de tipo actuales. Incluye todas las colecciones y también las palabras que aún no pertenecen a ninguna, con sus traducciones, notas, ejemplos y formas verbales guardadas. También funciona si la pareja visible está vacía. El archivo queda en la carpeta de descargas que use tu navegador; la aplicación no lo añade al repositorio.
 
-El JSON lleva `format: "vocabia-words"`, `version: 2` y `exportedAt` para reconocer su estructura en una futura importación. Incluye los nombres y parejas de todas las colecciones, también las vacías, y cada palabra indica a cuáles pertenece. No incluye IDs internos, que solo sirven dentro de una base de datos concreta. El archivo **sí contiene tus notas y ejemplos**, por lo que conviene guardarlo en un lugar privado si escribes contenido personal. Esta etapa solo descarga una copia: todavía no permite importar ni restaura automáticamente los datos. Conservar una copia de `backend/data/` con el servidor detenido sigue siendo la opción para respaldar toda la base local tal cual.
+El JSON lleva `format: "vocabia-words"`, `version: 2` y `exportedAt` para reconocer su estructura. Incluye los nombres y parejas de todas las colecciones, también las vacías, y cada palabra indica a cuáles pertenece. No incluye IDs internos, que solo sirven dentro de una base de datos concreta. El archivo **sí contiene tus notas y ejemplos**, por lo que conviene guardarlo en un lugar privado si escribes contenido personal. Tampoco incluye el historial de estudio. Conservar una copia de `backend/data/` con el servidor detenido sigue siendo la opción para respaldar toda la base local tal cual.
 
 Para comprobarlo, crea una tarjeta Español → Inglés y otra Alemán → Español; selecciona la primera pareja, pulsa **Exportar colecciones** y abre el JSON descargado: deben aparecer ambas. La descarga usa una consulta general a la API, sin filtros, y muestra un error sin ocultar las tarjetas si esa consulta falla. Las pruebas comprueban el contenido del documento y la consulta sin filtros; la descarga real debe revisarse en tu navegador.
+
+### Vista previa de importación
+
+Pulsa **Previsualizar importación** y elige un JSON exportado por Vocabia. La pantalla muestra el número total de palabras y colecciones, y una muestra de las cinco primeras de cada clase. Acepta únicamente el formato `vocabia-words` versión 2 y archivos de hasta 2 MB. Comprueba los campos, los idiomas, los ejemplos y que las palabras apunten a colecciones existentes de la misma pareja. Si el archivo está dañado o no cumple esas reglas, muestra un error.
+
+Después de validar el archivo, la pantalla consulta todas las palabras y colecciones guardadas para compararlas. Una colección **ya existe** si tiene el mismo nombre y la misma pareja de idiomas. Una palabra se marca como **posible coincidencia** si coincide con una tarjeta guardada o con otra anterior en el mismo archivo por pareja, palabra y traducción; se ignoran mayúsculas y espacios al principio o al final, pero no las tildes. Las notas y los ejemplos pueden ser distintos: este aviso no decide que sean duplicados ni fusiona tarjetas. Se muestran los recuentos y el estado de los primeros cinco elementos de cada lista. Si falla la conexión, el archivo sigue visible y puedes reintentar la comparación.
+
+Elegir un archivo y examinarlo **no guarda ni sustituye nada**. El navegador lee el JSON; para comparar, consulta los datos actuales mediante dos peticiones `GET`. Solo al pulsar **Confirmar importación** envía el contenido al backend. Elige una de estas opciones:
+
+- **Importarlas igualmente (predeterminada):** crea todas las tarjetas del archivo, incluidas las que podrían duplicar otras. Conserva sus ejemplos y sus relaciones con las colecciones del archivo; no modifica las tarjetas anteriores. Importar el mismo archivo dos veces puede crear copias repetidas.
+- **Omitir posibles coincidencias:** no crea tarjetas con la misma pareja, palabra y traducción que otra ya guardada o importada antes en el mismo archivo. Tampoco añade las colecciones del archivo a esas tarjetas existentes. Es útil si estás reimportando una copia y prefieres evitar duplicados.
+
+Las colecciones con el mismo nombre y pareja se reutilizan en ambos modos. La respuesta muestra cuántas colecciones se crearon o reutilizaron y cuántas palabras se crearon u omitieron. El servidor vuelve a validar el archivo y realiza todos los cambios en una **transacción**: si falla el guardado, revierte el conjunto. Si se pierde la conexión justo después de enviar la petición, el navegador puede no saber si terminó; revisa tus tarjetas antes de repetir la importación. La comparación era una foto anterior al guardado y los recuentos finales pueden variar si los datos cambiaron entre ambos pasos. Un archivo de versión 1, creado por una exportación antigua, todavía no se admite.
+
+Para probarlo sin arriesgar tus datos, exporta primero una copia. Abre ese archivo, elige **Omitirlas** antes de confirmar y comprueba que no se crean duplicados. Después añade una palabra nueva a otro archivo de prueba, impórtalo y verifica que aparece. Si dejas marcada **Importarlas igualmente**, se crearán tarjetas repetidas cuando coincidan; puedes examinarlas con **Buscar coincidencias**. El JSON conserva notas, ejemplos y formas inglesas.
 
 ### Ejemplos con traducción y tarjetas por color
 
@@ -183,10 +224,22 @@ Vocabia/
       StudyLanguages.tsx    Selección del idioma de estudio en la pantalla principal
       StudyMode.tsx         Ejercicio sencillo de recordar y revelar traducciones
       StudyMode.test.tsx    Pruebas de rondas y respuestas escritas
+      StudyHistory.tsx      Cinco rondas recientes de la pareja de idiomas
       CollectionsPanel.tsx   Crear, seleccionar y gestionar colecciones
+      FindMatches.tsx        Revisión de coincidencias y acceso a la fusión
+      findWordMatches.ts    Agrupación por pareja, palabra y traducción
+      MergeDialog.tsx        Selección, vista previa y confirmación de fusión
+      mergeText.ts           Textos de fusión en los siete idiomas
       collectionsText.ts     Textos de colecciones en los siete idiomas
       exportWords.ts         Documento JSON versionado y descarga en el navegador
       exportWords.test.ts    Prueba del contenido exportado
+      ImportPreviewDialog.tsx Vista previa, opciones y confirmación de importación
+      importPreview.ts       Validación del JSON exportado
+      importPreview.test.ts  Pruebas del formato, relaciones y límites
+      compareImport.ts       Comparación orientativa con los datos actuales
+      compareImport.test.ts  Pruebas de coincidencias y parejas de idiomas
+      importText.ts          Textos de la vista previa en siete idiomas
+      importActionText.ts    Textos de las opciones y resultado de importación
       verbFormsText.ts      Etiquetas de las formas inglesas en los siete idiomas
       styles.css            Diseño y adaptación a móvil
       *.test.tsx            Pruebas de interacción
@@ -196,16 +249,23 @@ Vocabia/
       server.ts             Arranque y cierre del servidor
       app.ts                Rutas HTTP y manejo de errores
       collections.ts        Rutas de colecciones y sus palabras
+      importWords.ts        Validación y guardado transaccional de la importación
+      mergeWords.ts         Guardado y recuperación transaccional de fusiones
+      studyRounds.ts        Consulta y guardado de resúmenes de estudio
       database.ts           Conexión, esquema y demostración
       validation.ts         Reglas de los datos recibidos
       app.test.ts           Pruebas de API y SQL
       database.test.ts      Conservación de datos y atomicidad de la migración
+      studyRounds.test.ts   Pruebas de validación y consulta del historial
+      mergeWords.test.ts    Pruebas de unión y reversión de fusiones
     .env.example            Configuración de ejemplo, sin secretos
   database/
     001_initial.sql         Esquema inicial
     002_example_translations.sql  Conversión de ejemplos antiguos sin perder frases
     003_english_verb_forms.sql    Columna opcional para formas de verbos ingleses
     004_collections.sql     Colecciones y relación con palabras
+    005_study_rounds.sql    Historial de resúmenes por pareja de idiomas
+    006_merge_history.sql   Estados anteriores para deshacer fusiones
   package.json              Comandos comunes
   package-lock.json         Versiones exactas de las dependencias
 ```
@@ -280,14 +340,26 @@ En Windows, con Node 24.14.0 y npm 11.9.0:
 - `npm run dev`: ambos servidores arrancan. Frontend HTTP 200 y API accesible a través del proxy.
 - Prueba real por HTTP: crear una palabra, detener ambos servidores, reiniciar, recuperar la palabra, editar sus dos ejemplos y borrarla (204). Al terminar quedan las seis entradas de demostración.
 - Git ignora dependencias, compilaciones, `.env` y datos locales.
-- Pendientes: revisión visual y de interacción en navegador real, y prueba contra un servidor PostgreSQL independiente. No se ha desplegado ni comprobado un entorno de producción.
+- Pendientes: revisión visual manual y prueba contra un servidor PostgreSQL independiente. No se ha desplegado ni comprobado un entorno de producción.
+
+### Comprobación posterior en Chrome — 28 de octubre de 2026
+
+Se recorrió la interfaz en Chrome sin ventana, con una base PGlite **temporal en memoria** para no tocar `backend/data/`: crear una colección y una tarjeta con ejemplo traducido, exportar y leer el JSON descargado, importar ese mismo archivo con **Omitirlas** y comprobar que se omitió una tarjeta duplicada. Después se completó una ronda de dos preguntas: una respuesta revelada y otra escrita correctamente. El resumen mostró **2 repasadas, 1 escrita y 1 coincidencia**. Esta prueba confirma ese flujo en un navegador real; no sustituye una revisión visual manual en móvil ni una prueba con un servidor PostgreSQL externo.
+
+### Comprobación de la fusión — 29 de octubre de 2026
+
+Con dos tarjetas `dormir → sleep` en A1 y A2 y una base PGlite temporal, Chrome abrió la comparación, arrastró un ejemplo de la segunda tarjeta al resultado y completó la revisión. Tras confirmar la eliminación opcional, la base conservó una sola tarjeta con los dos ejemplos, las notas y la forma verbal elegidas y la pertenencia a ambas colecciones. También se revisó una captura móvil del cuadro de fusión. Aún falta probar el gesto táctil real en un teléfono y la operación con un servidor PostgreSQL independiente.
+
+### Comprobación de «Deshacer fusión» en Chrome
+
+Con otra base PGlite temporal en memoria, Chrome mostró las dos tarjetas A1 y A2 y la vista previa de su unión. Se confirmó la fusión, se recargó la página y apareció **Deshacer última fusión**. Tras pulsarlo, la base volvió a contener las dos tarjetas con sus identificadores, ejemplos, notas y colecciones originales. Esta prueba cubre el recorrido real de la interfaz y la persistencia del historial durante una recarga; sigue pendiente probarlo con un servidor PostgreSQL independiente.
 
 ## API
 
 | Método | Ruta | Resultado |
 | --- | --- | --- |
 | GET | `/api/words?sourceLanguage=es&targetLanguage=en&search=book&wordType=noun&collectionId=1` | Lista de la pareja exacta, con búsqueda, tipo y colección opcionales, 200 |
-| POST | `/api/words` | Crea una palabra, 201 |
+| POST | `/api/words` o `/api/words?collectionId=1` | Crea una palabra y, opcionalmente, la añade a una colección de la misma pareja, 201 |
 | PUT | `/api/words/:id` | Reemplaza los campos de una palabra, 200 |
 | DELETE | `/api/words/:id` | Borra una palabra, 204 |
 | GET | `/api/collections?sourceLanguage=es&targetLanguage=en` | Lista de colecciones de la pareja con número de palabras, 200 |
@@ -295,6 +367,12 @@ En Windows, con Node 24.14.0 y npm 11.9.0:
 | DELETE | `/api/collections/:id` | Borra la colección, conserva sus palabras, 204 |
 | POST | `/api/collections/:id/words/:wordId` | Añade una palabra existente de la misma pareja, 204 |
 | DELETE | `/api/collections/:id/words/:wordId` | Quita una palabra de la colección, 204 |
+| POST | `/api/import` | Recibe `mode` (`skipMatches` o `includeMatches`) y `document`, valida y guarda la importación completa, 201 |
+| POST | `/api/words/merge` | Recibe dos IDs, la tarjeta resultante y `deleteSource`; une colecciones y, si se elige, elimina la segunda tarjeta, 200 |
+| GET | `/api/words/merge/latest?sourceLanguage=es&targetLanguage=en` | Última fusión pendiente de esa pareja o `null`, 200 |
+| POST | `/api/words/merge/:id/undo` | Recupera el estado previo si las tarjetas no cambiaron, 200; conflicto, 409 |
+| GET | `/api/study-rounds?sourceLanguage=es&targetLanguage=en` | Devuelve las cinco rondas más recientes de esa pareja, 200 |
+| POST | `/api/study-rounds` | Guarda `sourceLanguage`, `targetLanguage`, `questionCount`, `writtenCount` y `matchedCount`, 201 |
 
 Si se envía un idioma de la pareja, deben enviarse los dos y ser distintos. La interfaz siempre envía ambos. La API conserva las consultas generales sin pareja y el parámetro anterior `language` para consultas directas, pero los controles de la aplicación mantienen la pareja seleccionada.
 
@@ -335,7 +413,7 @@ Antes de avanzar, intenta explicar ese recorrido con tus palabras y modificar un
 
 ## Siguientes etapas (sin implementar)
 
-1. **Datos y estudio:** diseñar una importación segura con validación y control de duplicados; después valorar ejercicios con frases completas y seguimiento.
+1. **Datos y estudio:** ampliar la recuperación a un historial visible de todas las fusiones, soporte de archivos antiguos y, si resulta útil, estadísticas por palabra. Los totales actuales son por ronda.
 2. **Preparación para uso remoto:** usuarios, autorización, paginación si crece la colección, migraciones y despliegue con PostgreSQL independiente.
 3. **Automatización:** CI/CD cuando se defina un destino de despliegue. Docker cuando sea útil reproducir el entorno entre máquinas.
 4. **Integraciones opcionales:** traducción y voz cuando aporten valor a un flujo ya probado y se hayan evaluado coste y privacidad.

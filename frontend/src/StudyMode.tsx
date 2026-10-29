@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
-import type { Word, WordInput } from './model';
+import { useRef, useState, type FormEvent } from 'react';
+import { request, type StudyRound, type Word, type WordInput } from './model';
 import { verbFormsText } from './verbFormsText';
+import { StudyHistory } from './StudyHistory';
 
 export const studyModeText: Record<WordInput['sourceLanguage'], {
   practice: string; back: string; reveal: string; next: string; prompt: string; progress: string;
@@ -15,17 +16,40 @@ export const studyModeText: Record<WordInput['sourceLanguage'], {
   ja: { practice: '練習する', back: 'カードに戻る', reveal: '答えを見る', next: '次の問題', prompt: '何と言いますか？', progress: '{total}件中{current}件目', typeAnswer: '答えを入力', answerLabel: '訳を入力', baseLabel: '訳', check: '確認する', correct: '正解！保存した答えと一致しました。', different: '保存した答えとは異なります。ほかの答えも正しい場合があります。', newRound: '次のラウンド' },
 };
 
-type QuestionKind = 'base' | 'past' | 'pastParticiple' | 'ing';
-interface Question { word: Word; kind: QuestionKind; expected: string }
+const sentenceLabels: Record<WordInput['sourceLanguage'], string> = {
+  es: 'Frase completa', en: 'Full sentence', fr: 'Phrase complète', de: 'Ganzer Satz',
+  it: 'Frase completa', pt: 'Frase completa', ja: '文全体',
+};
+
+const roundSummaryText: Record<WordInput['sourceLanguage'], {
+  view: string; title: string; reviewed: string; written: string; matched: string; help: string;
+  saving: string; saved: string; saveError: string;
+}> = {
+  es: { view: 'Ver resumen', title: 'Resumen de la ronda', reviewed: 'Preguntas repasadas', written: 'Respuestas escritas', matched: 'Coincidencias con lo guardado', help: 'Mostrar una respuesta no cuenta como intento. Otra traducción también podría ser válida.', saving: 'Guardando la ronda…', saved: 'Ronda guardada en el historial.', saveError: 'No se pudo confirmar si la ronda se guardó. Consulta el historial antes de repetirla.' },
+  en: { view: 'View summary', title: 'Round summary', reviewed: 'Questions reviewed', written: 'Answers typed', matched: 'Matches with saved answers', help: 'Revealing an answer does not count as an attempt. Another translation may also be valid.', saving: 'Saving round…', saved: 'Round saved to history.', saveError: 'Could not confirm whether the round was saved. Check the history before repeating it.' },
+  fr: { view: 'Voir le résumé', title: 'Résumé de la série', reviewed: 'Questions révisées', written: 'Réponses écrites', matched: 'Correspondances avec les réponses enregistrées', help: 'Afficher une réponse ne compte pas comme une tentative. Une autre traduction peut aussi être valable.', saving: 'Enregistrement de la série…', saved: 'Série enregistrée dans l’historique.', saveError: 'Impossible de confirmer l’enregistrement. Vérifiez l’historique avant de recommencer.' },
+  de: { view: 'Zusammenfassung ansehen', title: 'Rundenübersicht', reviewed: 'Geübte Fragen', written: 'Geschriebene Antworten', matched: 'Übereinstimmungen mit gespeicherten Antworten', help: 'Das Anzeigen einer Antwort zählt nicht als Versuch. Eine andere Übersetzung kann ebenfalls richtig sein.', saving: 'Runde wird gespeichert…', saved: 'Runde im Verlauf gespeichert.', saveError: 'Es konnte nicht bestätigt werden, ob die Runde gespeichert wurde. Prüfe den Verlauf vor einer Wiederholung.' },
+  it: { view: 'Vedi riepilogo', title: 'Riepilogo del turno', reviewed: 'Domande ripassate', written: 'Risposte scritte', matched: 'Corrispondenze con le risposte salvate', help: 'Mostrare una risposta non conta come tentativo. Anche un’altra traduzione può essere valida.', saving: 'Salvataggio del turno…', saved: 'Turno salvato nella cronologia.', saveError: 'Impossibile confermare il salvataggio. Controlla la cronologia prima di ripetere il turno.' },
+  pt: { view: 'Ver resumo', title: 'Resumo da ronda', reviewed: 'Perguntas revistas', written: 'Respostas escritas', matched: 'Correspondências com as respostas guardadas', help: 'Mostrar uma resposta não conta como tentativa. Outra tradução também pode ser válida.', saving: 'A guardar a ronda…', saved: 'Ronda guardada no histórico.', saveError: 'Não foi possível confirmar se a ronda foi guardada. Consulta o histórico antes de a repetir.' },
+  ja: { view: '結果を見る', title: 'ラウンドの結果', reviewed: '復習した問題', written: '入力した回答', matched: '保存済みの回答と一致', help: '答えを表示するだけでは回答に数えません。ほかの訳も正しい場合があります。', saving: 'ラウンドを保存中…', saved: '履歴に保存しました。', saveError: '保存できたか確認できませんでした。もう一度行う前に履歴を確認してください。' },
+};
+
+type QuestionKind = 'base' | 'past' | 'pastParticiple' | 'ing' | 'example';
+interface Question { word: Word; kind: QuestionKind; prompt: string; expected: string }
 
 // Cada campo rellenado genera una pregunta distinta; una tarjeta puede aportar varias.
 function makeQuestions(words: Word[]): Question[] {
   return words.flatMap(word => {
-    const questions: Question[] = [{ word, kind: 'base', expected: word.translation }];
+    const questions: Question[] = [{ word, kind: 'base', prompt: word.term, expected: word.translation }];
     if (word.wordType === 'verb' && word.targetLanguage === 'en' && word.englishVerbForms) {
       for (const kind of ['past', 'pastParticiple', 'ing'] as const) {
         const expected = word.englishVerbForms[kind]?.trim() ?? '';
-        if (expected) questions.push({ word, kind, expected });
+        if (expected) questions.push({ word, kind, prompt: word.term, expected });
+      }
+    }
+    for (const example of word.examples) {
+      if (example.translation.trim()) {
+        questions.push({ word, kind: 'example', prompt: example.text, expected: example.translation });
       }
     }
     return questions;
@@ -49,20 +73,29 @@ function normalizeAnswer(value: string, language: WordInput['targetLanguage']): 
 interface Props {
   words: Word[];
   language: WordInput['sourceLanguage'];
+  studyLanguage: WordInput['targetLanguage'];
 }
 
-export function StudyMode({ words, language }: Props) {
+export function StudyMode({ words, language, studyLanguage }: Props) {
   const [deck, setDeck] = useState(() => shuffleQuestions(makeQuestions(words)));
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [writing, setWriting] = useState(false);
   const [answer, setAnswer] = useState('');
   const [matches, setMatches] = useState<boolean | null>(null);
+  const [finished, setFinished] = useState(false);
+  const [writtenCount, setWrittenCount] = useState(0);
+  const [matchedCount, setMatchedCount] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const saveStarted = useRef(false);
   const copy = studyModeText[language];
+  const summary = roundSummaryText[language];
   const question = deck[index];
   if (!question) return null;
   const word = question.word;
-  const kindLabel = question.kind === 'base' ? copy.baseLabel : verbFormsText[language][question.kind];
+  const kindLabel = question.kind === 'base' ? copy.baseLabel
+    : question.kind === 'example' ? sentenceLabels[language] : verbFormsText[language][question.kind];
 
   function resetQuestion() {
     setRevealed(false);
@@ -73,37 +106,77 @@ export function StudyMode({ words, language }: Props) {
 
   function advance() {
     if (index + 1 === deck.length) {
-      setDeck(shuffleQuestions(makeQuestions(words)));
-      setIndex(0);
+      if (saveStarted.current) return;
+      saveStarted.current = true;
+      setFinished(true);
+      setSaveStatus('saving');
+      void request<StudyRound>('/study-rounds', {
+        method: 'POST', body: JSON.stringify({
+          sourceLanguage: language, targetLanguage: studyLanguage,
+          questionCount: deck.length, writtenCount, matchedCount,
+        }),
+      }).then(() => {
+        setSaveStatus('saved');
+        setHistoryRevision(value => value + 1);
+      }).catch(() => {
+        setSaveStatus('error');
+        setHistoryRevision(value => value + 1);
+      });
     } else {
       setIndex(index + 1);
+      resetQuestion();
     }
+  }
+
+  function startRound() {
+    saveStarted.current = false;
+    setDeck(shuffleQuestions(makeQuestions(words)));
+    setIndex(0);
+    setFinished(false);
+    setWrittenCount(0);
+    setMatchedCount(0);
+    setSaveStatus('idle');
     resetQuestion();
   }
 
   function checkAnswer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!answer.trim()) return;
-    setMatches(normalizeAnswer(answer, word.targetLanguage) === normalizeAnswer(question.expected, word.targetLanguage));
+    if (!answer.trim() || revealed) return;
+    const correct = normalizeAnswer(answer, word.targetLanguage) === normalizeAnswer(question.expected, word.targetLanguage);
+    setMatches(correct);
+    setWrittenCount(count => count + 1);
+    if (correct) setMatchedCount(count => count + 1);
     setRevealed(true);
   }
 
-  return <section className="practice-card" aria-label={copy.practice}>
+  if (finished) return <><section className="practice-card practice-summary" aria-label={copy.practice}>
+    <h3>{summary.title}</h3>
+    <dl>
+      <div><dt>{summary.reviewed}</dt><dd>{deck.length}</dd></div>
+      <div><dt>{summary.written}</dt><dd>{writtenCount}</dd></div>
+      <div><dt>{summary.matched}</dt><dd>{matchedCount}</dd></div>
+    </dl>
+    <p>{summary.help}</p>
+    <p className={saveStatus === 'error' ? 'study-save-error' : 'study-save-status'} role="status">{saveStatus === 'saving' ? summary.saving : saveStatus === 'saved' ? summary.saved : saveStatus === 'error' ? summary.saveError : ''}</p>
+    <button type="button" className="primary" disabled={saveStatus === 'saving'} onClick={startRound}>{copy.newRound}</button>
+  </section><StudyHistory sourceLanguage={language} targetLanguage={studyLanguage} revision={historyRevision} /></>;
+
+  return <><section className="practice-card" aria-label={copy.practice}>
     <p className="practice-progress">{copy.progress.replace('{current}', String(index + 1)).replace('{total}', String(deck.length))}</p>
     <p className="practice-prompt">{copy.prompt}</p>
     <p className="practice-kind">{kindLabel}</p>
-    <h3 lang={word.sourceLanguage}>{word.term}</h3>
+    <h3 className={question.kind === 'example' ? 'practice-sentence' : undefined} lang={word.sourceLanguage}>{question.prompt}</h3>
     {writing && !revealed && <form className="practice-form" onSubmit={checkAnswer}>
       <label htmlFor="practice-answer">{question.kind === 'base' ? copy.answerLabel : `${copy.answerLabel}: ${kindLabel}`}</label>
-      <input id="practice-answer" lang={word.targetLanguage} value={answer} onChange={event => setAnswer(event.target.value)} maxLength={question.kind === 'base' ? 200 : 120} autoComplete="off" />
+      <input id="practice-answer" lang={word.targetLanguage} value={answer} onChange={event => setAnswer(event.target.value)} maxLength={question.kind === 'example' ? 500 : question.kind === 'base' ? 200 : 120} autoComplete="off" />
       <button type="submit" className="primary" disabled={!answer.trim()}>{copy.check}</button>
     </form>}
     {matches !== null && <p className={`practice-feedback ${matches ? 'is-correct' : 'is-different'}`} role="status"><span aria-hidden="true">{matches ? '✓' : '!'}</span>{matches ? copy.correct : copy.different}</p>}
-    {revealed && <p className="practice-answer" lang={word.targetLanguage}>{question.expected}</p>}
+    {revealed && <p className={`practice-answer${question.kind === 'example' ? ' practice-sentence' : ''}`} lang={word.targetLanguage}>{question.expected}</p>}
     <div className="practice-actions">
       {!revealed
         ? <><button type="button" className="secondary" onClick={() => setRevealed(true)}>{copy.reveal}</button>{!writing && <button type="button" className="primary" onClick={() => setWriting(true)}>{copy.typeAnswer}</button>}</>
-        : <button type="button" className="primary" onClick={advance}>{index + 1 === deck.length ? copy.newRound : copy.next}</button>}
+        : <button type="button" className="primary" onClick={advance}>{index + 1 === deck.length ? summary.view : copy.next}</button>}
     </div>
-  </section>;
+  </section><StudyHistory sourceLanguage={language} targetLanguage={studyLanguage} revision={historyRevision} /></>;
 }

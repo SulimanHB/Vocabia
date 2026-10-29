@@ -4,15 +4,33 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 // Una interfaz pequeña permite usar las mismas consultas con ambos motores.
-export interface Database {
+export interface Queryable {
   query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
+}
+export interface Database extends Queryable {
+  transaction<T>(callback: (tx: Queryable) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
 export function openDatabase(): Database {
   if (process.env.DATABASE_URL) {
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-    return { query: (sql, params) => pool.query(sql, params), close: () => pool.end() };
+    return {
+      query: (sql, params) => pool.query(sql, params),
+      transaction: async callback => {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const result = await callback({ query: (sql, params) => client.query(sql, params) });
+          await client.query('COMMIT');
+          return result;
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally { client.release(); }
+      },
+      close: () => pool.end(),
+    };
   }
   return new PGlite(fileURLToPath(new URL('../data/', import.meta.url)));
 }
@@ -31,6 +49,16 @@ export async function initializeDatabase(db: Database, seed = true) {
   const collectionsMigration = await readFile(new URL('../../database/004_collections.sql', import.meta.url), 'utf8');
   for (const statement of collectionsMigration.split(';').filter(part => part.trim())) await db.query(statement);
   await db.query("INSERT INTO app_migrations(name) VALUES ('004_collections') ON CONFLICT DO NOTHING");
+  const studyMigration = await readFile(new URL('../../database/005_study_rounds.sql', import.meta.url), 'utf8');
+  await db.transaction(async tx => {
+    for (const statement of studyMigration.split(';').filter(part => part.trim())) await tx.query(statement);
+    await tx.query("INSERT INTO app_migrations(name) VALUES ('005_study_rounds') ON CONFLICT DO NOTHING");
+  });
+  const mergeMigration = await readFile(new URL('../../database/006_merge_history.sql', import.meta.url), 'utf8');
+  await db.transaction(async tx => {
+    for (const statement of mergeMigration.split(';').filter(part => part.trim())) await tx.query(statement);
+    await tx.query("INSERT INTO app_migrations(name) VALUES ('006_merge_history') ON CONFLICT DO NOTHING");
+  });
   if (!seed) return;
   const examples = [
     ['serendipity', 'casualidad afortunada', 'en', 'es', 'noun', 'Encontrar algo valioso cuando buscabas otra cosa.', ['Finding this book was pure serendipity.']],

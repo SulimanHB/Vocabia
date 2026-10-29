@@ -60,4 +60,8 @@ export const collectionFiltersSchema = z.object({
   message: 'Los idiomas deben ser distintos.',
 });
 
+export const wordCreationFiltersSchema = z.object({
+  collectionId: z.string().regex(/^[1-9]\d*$/).transform(Number).pipe(z.number().int().max(2147483647)).optional(),
+}).strict();
+
 export type WordInput = z.infer<typeof wordSchema>;

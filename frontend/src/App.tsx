@@ -9,7 +9,9 @@ import { StudyMode, studyModeText } from './StudyMode';
 import { verbFormsText } from './verbFormsText';
 import { downloadExport } from './exportWords';
 import { CollectionsPanel } from './CollectionsPanel';
+import { FindMatches } from './FindMatches';
 import { collectionsText } from './collectionsText';
+import { ImportPreview } from './ImportPreviewDialog';
 
 const referenceLanguageKey = 'vocabia.referenceLanguage';
 const studyLanguageKey = 'vocabia.studyLanguage';
@@ -109,7 +111,10 @@ export function App() {
   async function save(word: WordInput) {
     setBusy(true);
     try {
-      await request(`/words${editing ? `/${editing.id}` : ''}`, { method: editing ? 'PUT' : 'POST', body: JSON.stringify(word) });
+      const collectionId = !editing && word.sourceLanguage === referenceLanguage && word.targetLanguage === studyLanguage
+        ? selectedCollectionId : null;
+      const path = editing ? `/words/${editing.id}` : `/words${collectionId === null ? '' : `?collectionId=${collectionId}`}`;
+      await request(path, { method: editing ? 'PUT' : 'POST', body: JSON.stringify(word) });
       editor.current?.close();
       setNotice(editing ? 'wordUpdated' : 'wordAdded');
       setRevision(value => value + 1);
@@ -160,8 +165,9 @@ export function App() {
       <section className="intro" lang={referenceLanguage}><div><p className="eyebrow">{text.eyebrow}</p><h1>{text.title}<br /><em>{text.titleAccent}</em></h1><p className="intro-copy">{text.introduction}<br className="desktop-break" /> {text.invitation}</p></div><div className="word-art" aria-hidden="true"><span className="art-small">{text.artCaption}</span><span className="art-word">hello<span>hola</span></span><span className="art-bottom">bonjour · ciao · hallo · olá</span></div></section>
       <StudyLanguages referenceLanguage={referenceLanguage} studyLanguage={studyLanguage} onChange={changeStudyLanguage} />
       <CollectionsPanel key={`${referenceLanguage}-${studyLanguage}`} referenceLanguage={referenceLanguage} studyLanguage={studyLanguage} selectedId={selectedCollectionId} revision={revision} onSelect={setSelectedCollectionId} onMutation={() => setRevision(value => value + 1)} />
+      <FindMatches key={`matches-${referenceLanguage}-${studyLanguage}`} sourceLanguage={referenceLanguage} targetLanguage={studyLanguage} revision={revision} onMerged={() => setRevision(value => value + 1)} />
       <section className="collection" aria-labelledby="collection-heading">
-        <div className="collection-top"><div><div className="title-row"><h2 id="collection-heading">{ui.collection}</h2><span className="count">{loading ? '…' : visibleWords.length}</span></div><p>{ui.collectionHelp}</p></div><div className="collection-actions"><button type="button" className="secondary" disabled={exporting} onClick={() => void exportCollection()}>{exporting ? ui.exportingWords : ui.exportWords}</button><button className="primary" onClick={() => openEditor(null)}><span aria-hidden="true">＋</span> {ui.addWord}</button></div></div>
+        <div className="collection-top"><div><div className="title-row"><h2 id="collection-heading">{ui.collection}</h2><span className="count">{loading ? '…' : visibleWords.length}</span></div><p>{ui.collectionHelp}</p></div><div className="collection-actions"><button type="button" className="secondary" disabled={exporting} onClick={() => void exportCollection()}>{exporting ? ui.exportingWords : ui.exportWords}</button><ImportPreview language={referenceLanguage} onImported={() => setRevision(value => value + 1)} /><button className="primary" onClick={() => openEditor(null)}><span aria-hidden="true">＋</span> {ui.addWord}</button></div></div>
         <div className="filters"><label className="search"><span aria-hidden="true">⌕</span><span className="sr-only">{ui.search}</span><input type="search" value={search} maxLength={120} onChange={e => setSearch(e.target.value)} placeholder={ui.searchPlaceholder} /></label></div>
         <div className="type-filters" role="group" aria-label={ui.filterType}>
           <button type="button" aria-pressed={wordType === ''} onClick={() => setWordType('')}>{ui.allTypes}</button>
@@ -173,7 +179,7 @@ export function App() {
         {membershipError !== null && <p className="error" role="alert">{getErrorMessage(membershipError, ui)}</p>}
         {error !== null && <div className="error" role="alert">{getErrorMessage(error, ui)} <button className="text-button" onClick={() => setRevision(value => value + 1)}>{ui.retry}</button></div>}
         {!loading && !error && visibleWords.length > 0 && <div className="practice-toggle"><button type="button" className="secondary" onClick={() => setPracticing(value => !value)}>{practicing ? practiceCopy.back : practiceCopy.practice}</button></div>}
-        {loading ? <div className="empty" role="status">{ui.preparing}</div> : error ? null : visibleWords.length === 0 ? <div className="empty"><h3>{search || wordType || selectedCollectionId !== null ? ui.noMatches : ui.emptyTitle}</h3><p>{search || wordType || selectedCollectionId !== null ? ui.noMatchesHelp : ui.emptyHelp}</p></div> : practicing ? <StudyMode key={`${referenceLanguage}-${studyLanguage}-${search}-${wordType}-${selectedCollectionId}`} words={visibleWords} language={referenceLanguage} /> : <div className="word-grid">{visibleWords.map(word => <article className={`word-card card-${word.wordType}`} key={word.id} lang="es">
+        {loading ? <div className="empty" role="status">{ui.preparing}</div> : error ? null : visibleWords.length === 0 ? <div className="empty"><h3>{search || wordType || selectedCollectionId !== null ? ui.noMatches : ui.emptyTitle}</h3><p>{search || wordType || selectedCollectionId !== null ? ui.noMatchesHelp : ui.emptyHelp}</p></div> : practicing ? <StudyMode key={`${referenceLanguage}-${studyLanguage}-${search}-${wordType}-${selectedCollectionId}`} words={visibleWords} language={referenceLanguage} studyLanguage={studyLanguage} /> : <div className="word-grid">{visibleWords.map(word => <article className={`word-card card-${word.wordType}`} key={word.id} lang="es">
           <div className="card-top"><span className={`type-tag type-${word.wordType}`}>{wordTypes[word.wordType]}</span><span className="language-pair">{languages[word.sourceLanguage]} <span aria-hidden="true">→</span><span className="sr-only">a</span> {languages[word.targetLanguage]}</span></div>
           <div className="word-pair"><h3 lang={word.sourceLanguage}>{word.term}</h3><span className="pair-arrow" aria-hidden="true">→</span><p className="translation" lang={word.targetLanguage}>{word.translation}</p></div>
           {word.wordType === 'verb' && word.targetLanguage === 'en' && word.englishVerbForms && Object.values(word.englishVerbForms).some(Boolean) && <div className="card-verb-forms"><p>{verbCopy.title}</p><dl>{(['past', 'pastParticiple', 'ing'] as const).map(key => word.englishVerbForms?.[key] && <div key={key}><dt>{verbCopy[key]}</dt><dd lang="en">{word.englishVerbForms[key]}</dd></div>)}</dl></div>}

@@ -29,7 +29,7 @@ describe('Migración de ejemplos', () => {
       expect(after).toEqual({ ...before, examples, english_verb_forms: {} });
       await initializeDatabase(db, false);
       expect((await db.query('SELECT * FROM words')).rows[0]).toEqual(after);
-      expect((await db.query('SELECT name FROM app_migrations ORDER BY name')).rows).toEqual([{ name: '002_example_translations' }, { name: '003_english_verb_forms' }, { name: '004_collections' }]);
+      expect((await db.query('SELECT name FROM app_migrations ORDER BY name')).rows).toEqual([{ name: '002_example_translations' }, { name: '003_english_verb_forms' }, { name: '004_collections' }, { name: '005_study_rounds' }, { name: '006_merge_history' }]);
     } finally { await db.close(); }
   });
 
