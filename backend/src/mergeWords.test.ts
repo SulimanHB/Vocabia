@@ -22,6 +22,8 @@ it('une contenido y colecciones, conserva la segunda tarjeta hasta que se confir
   const sourceWord = { ...base, notes: 'Nota A2', examples: [{ text: 'Quiero dormir.', translation: 'I want to sleep.' }],
     englishVerbForms: { past: '', pastParticiple: 'slept', ing: 'sleeping' } };
   const source = await request(app).post(`/api/words?collectionId=${a2.body.id}`).send(sourceWord).expect(201);
+  await request(app).put(`/api/words/${keep.body.id}/study-mark`).send({ mark: 'known' }).expect(200);
+  await request(app).put(`/api/words/${source.body.id}/study-mark`).send({ mark: 'difficult' }).expect(200);
   const mergedWord = { ...base, notes: 'Nota A1\nNota A2', examples: [...base.examples, ...sourceWord.examples],
     englishVerbForms: { past: 'slept', pastParticiple: 'slept', ing: 'sleeping' } };
 
@@ -43,7 +45,7 @@ it('une contenido y colecciones, conserva la segunda tarjeta hasta que se confir
   await request(app).post(`/api/words/merge/${latest.body.id}/undo`).expect(200);
   const restored = (await request(app).get('/api/words').expect(200)).body;
   expect(restored.find((item: { id: number }) => item.id === source.body.id)).toMatchObject({
-    notes: 'Nota A2', examples: sourceWord.examples, collectionIds: [a2.body.id],
+    notes: 'Nota A2', examples: sourceWord.examples, collectionIds: [a2.body.id], studyMark: 'difficult',
   });
   expect(restored.find((item: { id: number }) => item.id === keep.body.id)).toMatchObject({
     notes: mergedWord.notes, collectionIds: [a1.body.id, a2.body.id],
@@ -53,7 +55,7 @@ it('une contenido y colecciones, conserva la segunda tarjeta hasta que se confir
   await request(app).post(`/api/words/merge/${previous.body.id}/undo`).expect(200);
   const original = (await request(app).get('/api/words').expect(200)).body;
   expect(original.find((item: { id: number }) => item.id === keep.body.id)).toMatchObject({
-    notes: 'Nota A1', examples: base.examples, collectionIds: [a1.body.id],
+    notes: 'Nota A1', examples: base.examples, collectionIds: [a1.body.id], studyMark: 'known',
   });
 });
 

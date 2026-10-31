@@ -12,11 +12,22 @@ const deck: Word[] = [
 
 let savedRounds: StudyRound[];
 let failSave: boolean;
+let failMark: boolean;
+let savedMarks: { id: number; mark: string }[];
 beforeEach(() => {
   savedRounds = [];
   failSave = false;
+  failMark = false;
+  savedMarks = [];
   vi.stubGlobal('fetch', vi.fn(async (url: string, options?: RequestInit) => {
     const path = new URL(url, 'http://localhost');
+    if (/^\/api\/words\/\d+\/study-mark$/.test(path.pathname) && options?.method === 'PUT') {
+      if (failMark) return new Response(null, { status: 500 });
+      const mark = JSON.parse(options.body as string).mark;
+      const id = Number(path.pathname.split('/')[3]);
+      savedMarks.push({ id, mark });
+      return new Response(JSON.stringify({ id, studyMark: mark }));
+    }
     if (path.pathname !== '/api/study-rounds') return new Response(null, { status: 404 });
     if (options?.method === 'POST') {
       if (failSave) return new Response(null, { status: 500 });
@@ -28,6 +39,32 @@ beforeEach(() => {
   }));
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+it('guarda una valoración personal solo al pulsar el botón y permite corregirla', async () => {
+  const user = userEvent.setup();
+  render(<StudyMode words={[deck[0]]} language="es" studyLanguage="en" />);
+  await user.click(screen.getByRole('button', { name: 'Mostrar respuesta' }));
+  expect(savedMarks).toHaveLength(0);
+  await user.click(screen.getByRole('button', { name: 'Me costó' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Me costó' })).toHaveAttribute('aria-pressed', 'true'));
+  expect(savedMarks).toEqual([{ id: 1, mark: 'difficult' }]);
+  await user.click(screen.getByRole('button', { name: 'La sabía' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'La sabía' })).toHaveAttribute('aria-pressed', 'true'));
+  expect(savedMarks.at(-1)).toEqual({ id: 1, mark: 'known' });
+});
+
+it('permite reintentar si falla el guardado de una marca', async () => {
+  failMark = true;
+  const user = userEvent.setup();
+  render(<StudyMode words={[deck[0]]} language="es" studyLanguage="en" />);
+  await user.click(screen.getByRole('button', { name: 'Mostrar respuesta' }));
+  await user.click(screen.getByRole('button', { name: 'Me costó' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo guardar la marca');
+  expect(screen.getByRole('button', { name: 'Me costó' })).toHaveAttribute('aria-pressed', 'false');
+  failMark = false;
+  await user.click(screen.getByRole('button', { name: 'Me costó' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Me costó' })).toHaveAttribute('aria-pressed', 'true'));
+});
 
 it('recupera las rondas de esta pareja al volver a entrar en Practicar', async () => {
   const user = userEvent.setup();

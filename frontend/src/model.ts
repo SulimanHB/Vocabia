@@ -15,7 +15,7 @@ export interface WordInput {
   notes: string;
   examples: Example[];
 }
-export interface Word extends WordInput { id: number; collectionIds?: number[] }
+export interface Word extends WordInput { id: number; collectionIds?: number[]; studyMark?: 'known' | 'difficult' | null }
 export interface Collection {
   id: number;
   name: string;

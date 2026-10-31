@@ -1,6 +1,23 @@
 # Vocabia
 
-Diccionario personal multilingüe para guardar vocabulario con contexto. Proyecto de aprendizaje y portfolio en construcción: esta primera etapa implementa un MVP local, sin cuentas de usuario ni publicación.
+**Diccionario personal multilingüe para guardar vocabulario y practicar idiomas.** Es un MVP local de aprendizaje y portfolio, desarrollado con React, TypeScript, Express y PostgreSQL/PGlite. Permite organizar palabras por pareja de idiomas y colección, añadir ejemplos, buscar, importar y exportar, y estudiar con ejercicios escritos y de escucha.
+
+![Diccionario de Vocabia con palabras de demostración en español e inglés](docs/screenshots/diccionario.png)
+
+[Ver también la pantalla de Estudio](docs/screenshots/estudio.png). Las capturas usan una base temporal con datos ficticios; no muestran vocabulario personal.
+
+### Pruébalo en local
+
+Necesitas Node.js 22.12 o posterior y npm. Desde la raíz del repositorio:
+
+```powershell
+npm ci
+npm run dev
+```
+
+Abre `http://localhost:5173`. Se inicia sin cuenta ni servidor PostgreSQL instalado: PGlite guarda los datos en `backend/data/`, ignorado por Git. Para comprobar el código, ejecuta `npm test`, `npm run typecheck` y `npm run build`. [Instalación detallada](#instalar-y-ejecutar) · [Pruebas](#comprobar-el-proyecto).
+
+**Estado:** el código y la base local funcionan; todavía no hay despliegue público, cuentas ni sincronización entre dispositivos. Los planes para dictar tarjetas y crear un tutor de IA están descritos en [Siguientes etapas](#siguientes-etapas-sin-implementar); aún no forman parte de la aplicación. La API actual está pensada para un solo usuario local.
 
 ## Estado inicial y decisiones
 
@@ -27,19 +44,26 @@ Referencia: [Vite](https://vite.dev/guide/) y [PGlite](https://pglite.dev/docs/)
 - Exportación JSON de la colección completa para conservar una copia del vocabulario.
 - Importación de un JSON exportado, con vista previa, comparación de coincidencias y confirmación antes de guardar.
 - Búsqueda de posibles coincidencias entre tarjetas de distintas colecciones de la pareja seleccionada, sin cambios automáticos.
-- Práctica básica: preguntas mezcladas por rondas sobre traducciones, formas inglesas y ejemplos traducidos, con respuesta oculta y opción de escribirla. Historial de las últimas cinco rondas por pareja de idiomas.
+- Práctica básica: preguntas mezcladas por rondas sobre traducciones, formas inglesas y ejemplos traducidos, con respuesta oculta y opción de escribirla. Puedes marcar cada palabra como conocida o difícil y repasar solo las difíciles de los filtros actuales. Historial de las últimas cinco rondas por pareja de idiomas.
 - Interfaz traducida a los siete idiomas disponibles, adaptable a móvil, con diálogos nativos y etiquetas de formulario. Las tarjetas conservan su contenido y sus etiquetas.
+- Navegación entre **Diccionario** (`/`) y **Estudio** (`/estudio`), con enlaces directos y botones atrás/adelante del navegador.
 - Estados de carga, colección vacía, errores y mensajes de éxito.
 - Seis entradas ficticias de demostración, cargadas una sola vez. Borrarlas no las repone al reiniciar.
 - Idiomas iniciales: español, inglés, francés, alemán, italiano, portugués y japonés. Se pueden añadir más ampliando los catálogos del backend y frontend.
 
-La aplicación permite guardar palabras repetidas: una misma palabra puede tener distintos significados o contextos. Las formas inglesas se guardan manualmente y ya pueden practicarse. El historial conserva totales por ronda, sin calificar respuestas alternativas ni medir dominio de cada palabra.
+La aplicación permite guardar palabras repetidas: una misma palabra puede tener distintos significados o contextos. Las formas inglesas se guardan manualmente y ya pueden practicarse. El historial conserva totales por ronda. La marca «La sabía» o «Me costó» es una valoración personal de la tarjeta; no califica respuestas alternativas ni calcula un nivel de dominio.
+
+### Dos espacios de trabajo
+
+**Diccionario** reúne la presentación, los idiomas, las colecciones, las coincidencias, la búsqueda y las tarjetas para añadir, editar, borrar, importar y exportar. **Estudio** muestra la pareja de idiomas, un selector sencillo de colección, los botones de práctica y las rondas recientes. La pareja y la colección elegidas se conservan al cambiar de sección durante la sesión; la búsqueda y el tipo del Diccionario no limitan los ejercicios. La cabecera permanece visible al desplazarse; al cambiar de sección desde ella, la nueva vista comienza arriba. Las URLs `/` y `/estudio` funcionan con atrás/adelante. En desarrollo, Vite sirve ambas rutas; al desplegar una SPA, el servidor deberá servir `index.html` también para `/estudio`.
+
+Comprobación en Chrome con una base PGlite temporal: la navegación entre ambas rutas funcionó, A1 limitó la práctica a sus palabras y `/estudio` abrió directamente al recargar. A 375 px la página no tuvo desplazamiento horizontal y se revisó una captura de la cabecera móvil. Las pruebas de interfaz comprueban además los botones atrás/adelante. Sigue pendiente configurar la ruta directa en el servidor de un futuro despliegue.
 
 ### Colecciones personalizadas
 
 **Tipo de palabra** describe qué es una entrada (verbo, adjetivo…). Una **colección** es una agrupación que eliges tú: «A1» puede contener `dormir → sleep` y `cansado → tired` aunque tengan tipos distintos. La misma tarjeta puede estar también en «Importantes», sin duplicar sus datos.
 
-Selecciona una pareja, pulsa **Nueva colección**, escribe el nombre y créala. Con la colección seleccionada, usa **Añadir palabra existente** para incorporar tarjetas de esa pareja. Si pulsas **Añadir palabra** y mantienes esa pareja de idiomas en el formulario, la nueva tarjeta entra directamente en la colección y también aparece en **Todas**. Si cambias su pareja en el formulario, se guarda en la pareja nueva, fuera de la colección actual. El selector **Todas** muestra de nuevo todas las tarjetas. La búsqueda y el filtro por tipo siguen funcionando dentro de la colección; **Practicar** usa las tarjetas que se ven. **Quitar de la colección** desvincula una tarjeta, pero la deja en **Todas**. **Eliminar colección** pide confirmación y conserva todas sus palabras.
+Selecciona una pareja, pulsa **Nueva colección**, escribe el nombre y créala. Con la colección seleccionada, usa **Añadir palabra existente** para incorporar tarjetas de esa pareja. Si pulsas **Añadir palabra** y mantienes esa pareja de idiomas en el formulario, la nueva tarjeta entra directamente en la colección y también aparece en **Todas**. Si cambias su pareja en el formulario, se guarda en la pareja nueva, fuera de la colección actual. El selector **Todas** muestra de nuevo todas las tarjetas. La búsqueda y el filtro por tipo siguen funcionando dentro de la colección. Al pasar a **Estudio**, se conserva la colección seleccionada, pero allí se eligen las colecciones sin controles de creación o borrado. **Quitar de la colección** desvincula una tarjeta, pero la deja en **Todas**. **Eliminar colección** pide confirmación y conserva todas sus palabras.
 
 Cada colección pertenece a una pareja ordenada: Español → Inglés y Alemán → Inglés tienen colecciones diferentes. Los nombres se pueden repetir en parejas distintas, pero no dos veces en la misma pareja aunque cambies mayúsculas. Por ahora no se pueden renombrar colecciones. El nivel «A1» es solo un nombre que pones tú; la aplicación no asigna niveles automáticamente.
 
@@ -73,15 +97,23 @@ Para probarlo: crea `dormir → sleep`, selecciona **Verbo** e **Inglés** como 
 
 La palabra y su traducción tienen ahora un tamaño parecido y una flecha muestra la dirección, por ejemplo **dormir → sleep**. Los filtros de tipo usan los mismos colores que las tarjetas. El filtro seleccionado se distingue también por su relleno y por `aria-pressed`; el nombre del tipo sigue visible. Los botones **Editar** y **Borrar** incluyen texto, un símbolo y una zona de pulsación mayor. El borrado conserva su confirmación.
 
-Pulsa **Practicar** cuando haya palabras en la pareja seleccionada. Se preparan preguntas con las palabras que cumplen la búsqueda y el filtro de tipo actuales. Cada tarjeta aporta una pregunta por su traducción principal. Si es un verbo traducido al inglés, aporta además una pregunta por cada forma guardada: pasado simple, participio pasado y forma `-ing`. Un verbo antiguo sin formas sigue aportando solo la pregunta de traducción. Las preguntas se mezclan al comenzar cada ronda y no se repite ninguna pregunta dentro de ella. Una misma palabra puede aparecer varias veces con etiquetas distintas. Piensa la respuesta y elige **Mostrar respuesta** o **Escribir respuesta**. Después pasa a la siguiente pregunta; al terminar pulsa **Ver resumen** y desde allí puedes iniciar **Nueva ronda**, con otra mezcla. **Volver a las tarjetas** recupera la lista. Por ejemplo, `dormir → sleep` con `slept` y `sleeping` guardados produce tres preguntas: traducción, pasado simple y forma `-ing`.
+Junto a la traducción de cada tarjeta aparece **Escuchar**. En `dormir → sleep` se pronuncia `sleep` con el idioma de estudio; no se reproduce `dormir`. El botón usa la misma función de voz que el ejercicio de escucha (`speech.ts`) y deja de estar disponible si el navegador no ofrece esa función. La aplicación no guarda ningún archivo de audio. La voz concreta y su calidad dependen del navegador y del sistema.
 
-Al escribir, **Comprobar** compara tu texto con la respuesta guardada para esa pregunta, ignorando mayúsculas, espacios sobrantes y diferencias de composición Unicode. Conserva tildes y otros caracteres que pueden distinguir palabras. Si coincide, aparece un **✓** y el mensaje «¡Correcto!»; si difiere, un aviso ámbar. Ambos estados tienen texto además de color. Una respuesta distinta puede ser válida en otro contexto: el mensaje indica únicamente que no coincide con la respuesta guardada y muestra esta última. La respuesta no se inserta en el HTML hasta que la pides o compruebas tu intento. `StudyMode.tsx` mantiene con `useState` la mezcla, la posición, el texto escrito y si se ha revelado; esos datos solo existen mientras está abierto el ejercicio. La mezcla usa Fisher–Yates sobre una copia de las preguntas para visitarlas una vez por ronda. Las preguntas y la comparación se calculan en el frontend; solo el resumen final se envía a la API.
+Entra en **Estudio** y pulsa **Practicar** cuando haya palabras en la pareja y colección seleccionadas. La búsqueda y el tipo que dejaste en Diccionario no afectan a esta ronda. Cada tarjeta aporta una pregunta por su traducción principal. Si es un verbo traducido al inglés, aporta además una pregunta por cada forma guardada: pasado simple, participio pasado y forma `-ing`. Un verbo antiguo sin formas sigue aportando solo la pregunta de traducción. Las preguntas se mezclan al comenzar cada ronda y no se repite ninguna pregunta dentro de ella. Una misma palabra puede aparecer varias veces con etiquetas distintas. Piensa la respuesta y elige **Mostrar respuesta** o **Escribir respuesta**. Después pasa a la siguiente pregunta; al terminar pulsa **Ver resumen** y desde allí puedes iniciar **Nueva ronda**, con otra mezcla. **Volver a Estudio** muestra de nuevo las opciones y el historial. Por ejemplo, `dormir → sleep` con `slept` y `sleeping` guardados produce tres preguntas: traducción, pasado simple y forma `-ing`.
+
+**Escuchar y elegir** es un ejercicio aparte. Pulsa **Escuchar palabra** para oír la traducción en el idioma de estudio y elige entre las palabras de tu idioma de referencia. Cada pregunta ofrece hasta cuatro opciones de la pareja y colección seleccionadas; se necesitan al menos dos palabras distintas. Se omiten palabras cuyo audio u opción coincida con otra tarjeta, para evitar preguntas con dos respuestas correctas. Al elegir, se muestra la respuesta y al final aparece el número de aciertos. Este resultado todavía no se guarda en el historial de rondas. Vocabia pide la voz al navegador: su disponibilidad, acento, calidad y posible procesamiento externo dependen del navegador y del sistema. Vocabia no usa micrófono, cuenta externa ni servicio de IA para este ejercicio. Para probarlo, añade `dormir → sleep`, `beber → drink` y otras dos palabras en Español → Inglés, entra en **Estudio**, pulsa **Escuchar y elegir** y comprueba que el audio y las opciones corresponden a esa pareja. Si eliges una colección, solo entran sus palabras.
+
+**Hablar y comprobar** practica la otra dirección: muestra `dormir`, pulsas **Hablar** y dices `sleep`. El navegador pide permiso para el micrófono y devuelve el texto que entendió; Vocabia lo compara con la traducción guardada, ignorando mayúsculas, espacios sobrantes y puntuación final. Si el texto reconocido no coincide, muestra qué entendió el navegador y permite **Hablar de nuevo** sin contar aún la pregunta; también puedes mostrar la respuesta y pasar a la siguiente. No se elige una palabra entre las sugerencias del navegador. Una coincidencia **no mide la calidad de la pronunciación**: el reconocedor puede entender una palabra mal pronunciada o fallar con una pronunciación válida. Si no reconoce nada, puedes intentarlo de nuevo o mostrar la respuesta. El resultado se queda en la ronda de esa pantalla; Vocabia no guarda audio ni transcripciones ni los añade al historial. Algunos navegadores no admiten esta API y otros pueden procesar el audio en un servicio externo del navegador. La página avisa de ello antes de activar el micrófono. Para probarlo, entra en **Estudio → Hablar y comprobar**, acepta el permiso y di una traducción de una tarjeta guardada. Comprueba también **Detener micrófono** y el aviso al denegar el permiso. La precisión depende del motor de reconocimiento del navegador; cambiarla de verdad requiere evaluar un motor de transcripción distinto con grabaciones de prueba.
+
+Al escribir, **Comprobar** compara tu texto con la respuesta guardada para esa pregunta, ignorando mayúsculas, espacios sobrantes y diferencias de composición Unicode. Conserva tildes y otros caracteres que pueden distinguir palabras. Si coincide, aparece un **✓** y el mensaje «¡Correcto!»; si difiere, un aviso ámbar. Ambos estados tienen texto además de color. Una respuesta distinta puede ser válida en otro contexto: el mensaje indica únicamente que no coincide con la respuesta guardada y muestra esta última. La respuesta no se inserta en el HTML hasta que la pides o compruebas tu intento. `StudyMode.tsx` mantiene con `useState` la mezcla, la posición, el texto escrito y si se ha revelado; esos datos solo existen mientras está abierto el ejercicio. La mezcla usa Fisher–Yates sobre una copia de las preguntas para visitarlas una vez por ronda. Las preguntas y la comparación se calculan en el frontend; la API recibe el resumen final y las marcas que eliges.
+
+Tras revelar o comprobar una respuesta, pulsa **La sabía** o **Me costó** si quieres valorar esa tarjeta. Esta elección es manual: una respuesta escrita distinta no se marca automáticamente como difícil, porque otra traducción puede ser válida. La última marca elegida para esa palabra sustituye a la anterior. **Practicar las difíciles** usa únicamente las palabras difíciles de la pareja y colección seleccionadas en Estudio; el número del botón indica cuántas entrarán. Si una ronda termina y ya no quedan palabras difíciles, **Nueva ronda** vuelve a las opciones de Estudio. El guardado muestra un error si falla y permite repetir el intento. La marca permanece al editar una palabra y se restaura al deshacer una fusión, pero la exportación JSON actual no la incluye.
 
 Al acabar, el resumen muestra **preguntas repasadas**, **respuestas escritas** y **coincidencias con las respuestas guardadas**. Si solo pulsas **Mostrar respuesta**, repasas la pregunta pero no cuenta como intento escrito. La siguiente ronda empieza con los contadores a cero. Como otra traducción también puede ser válida, una falta de coincidencia no equivale necesariamente a un error de idioma.
 
 ### Historial de rondas
 
-Al pulsar **Ver resumen**, la aplicación guarda automáticamente esos tres totales y la fecha en la base local. Debajo del ejercicio aparecen las **cinco rondas más recientes** de la pareja de idiomas seleccionada, también al volver a **Practicar** después de cerrar la página. El historial reúne las rondas de esa pareja aunque hayas usado colecciones o filtros distintos; no guarda qué palabras concretas salieron ni lo que escribiste. Si se pierde la conexión justo después de enviar el resumen, el navegador no puede saber si se guardó: muestra un aviso y conviene consultar el historial antes de repetir la ronda. El resumen sigue visible aunque falle el guardado.
+Al pulsar **Ver resumen**, la aplicación guarda automáticamente esos tres totales y la fecha en la base local. En Estudio aparecen las **cinco rondas más recientes** de la pareja de idiomas seleccionada, también antes de iniciar otra práctica o después de cerrar la página. El historial reúne las rondas de esa pareja aunque hayas usado colecciones distintas; no guarda qué palabras concretas salieron ni lo que escribiste. Si se pierde la conexión justo después de enviar el resumen, el navegador no puede saber si se guardó: muestra un aviso y conviene consultar el historial antes de repetir la ronda. El resumen sigue visible aunque falle el guardado.
 
 `005_study_rounds.sql` crea una tabla separada. Comprueba que las respuestas escritas no superen las preguntas y que las coincidencias no superen las escritas. La migración se aplica al arrancar y no modifica tarjetas ni colecciones. Si ya tienes datos importantes en `backend/data/`, conserva una copia con el servidor detenido antes de actualizar. Este historial pertenece a la base local compartida: todavía no hay cuentas, sincronización entre dispositivos ni estadísticas por palabra. La exportación JSON de vocabulario **no incluye** el historial de estudio.
 
@@ -215,7 +247,10 @@ Verificación del ajuste de parejas: `npm test` pasó **42 pruebas** en ese mome
 Vocabia/
   frontend/
     src/
-      App.tsx               Lista, filtros y coordinación de operaciones
+      App.tsx               Navegación, preferencias y coordinación de datos
+      DictionaryPage.tsx    Presentación del Diccionario y sus controles
+      StudyPage.tsx         Presentación de Estudio y selección de ejercicios
+      WordCard.tsx          Presentación de una tarjeta y sus acciones
       WordForm.tsx          Formulario de creación y edición
       model.ts              Tipos, catálogos y cliente de la API
       presentation.ts       Textos de presentación en los siete idiomas
@@ -223,7 +258,19 @@ Vocabia/
       LanguageFlag.tsx      Banderas SVG del selector de idioma
       StudyLanguages.tsx    Selección del idioma de estudio en la pantalla principal
       StudyMode.tsx         Ejercicio sencillo de recordar y revelar traducciones
+      ListeningExercise.tsx Ejercicio de escucha con opciones y voz del navegador
+      ListeningExercise.test.tsx Pruebas de audio, opciones y estados sin soporte
+      SpeakingExercise.tsx  Ejercicio hablado con reconocimiento del navegador
+      speechRecognition.ts  Adaptador para el reconocimiento de voz disponible
+      studyAnswers.ts       Comparación de respuestas escritas y habladas
+      shuffle.ts            Mezcla aleatoria compartida por los ejercicios
+      speech.test.ts        Cancelación normal y errores de voz
+      WordAudioButton.tsx  Botón de voz de cada tarjeta
+      speech.ts            Función de voz compartida con el ejercicio
+      StudyCollectionFilter.tsx Selector de colecciones sin acciones de edición en Estudio
+      appNavigationText.ts  Navegación y textos de Estudio en siete idiomas
       StudyMode.test.tsx    Pruebas de rondas y respuestas escritas
+      studyMarkText.ts       Textos de valoración y repaso en siete idiomas
       StudyHistory.tsx      Cinco rondas recientes de la pareja de idiomas
       CollectionsPanel.tsx   Crear, seleccionar y gestionar colecciones
       FindMatches.tsx        Revisión de coincidencias y acceso a la fusión
@@ -266,11 +313,18 @@ Vocabia/
     004_collections.sql     Colecciones y relación con palabras
     005_study_rounds.sql    Historial de resúmenes por pareja de idiomas
     006_merge_history.sql   Estados anteriores para deshacer fusiones
+    007_word_study_mark.sql Marca de estudio opcional en cada palabra
   package.json              Comandos comunes
   package-lock.json         Versiones exactas de las dependencias
 ```
 
 Se conserva una estructura pequeña: no se añaden capas de servicios y repositorios para cada operación. Cuando aparezca lógica de estudio más compleja, tendrá sentido extraerla de las rutas.
+
+### Revisión de código — 30 de octubre de 2026
+
+`App.tsx` coordina la navegación, las preferencias y la carga de palabras. `DictionaryPage.tsx` y `StudyPage.tsx` contienen la presentación de cada pantalla y gestionan su estado propio: exportación y pertenencia a colecciones en Diccionario; ejercicio abierto en Estudio. La representación de cada tarjeta vive en `WordCard.tsx`, que recibe una palabra y funciones para editar, borrar o quitar de una colección. Este patrón permite cambiar una pantalla sin mezclar sus detalles visuales con la carga de datos. `speech.ts` concentra el idioma y la velocidad de la voz para tarjetas y ejercicios. Al cambiar de palabra, cancela la voz anterior sin mostrar un falso error. El ejercicio de escucha compara repeticiones dentro de cada idioma por separado: una grafía igual en dos idiomas puede tener significados distintos y seguir siendo válida.
+
+`styles.css` se formateó manteniendo las mismas 384 reglas principales en el mismo orden; su cascada no cambió. Continúa en un archivo porque hay ajustes posteriores que dependen de reglas anteriores y una separación automática por pantalla podría modificar el diseño. `interfaceText.ts` sigue reuniendo los siete idiomas porque forma un catálogo coherente; si empieza a cambiar por separado, podremos dividirlo por idioma. `App.tsx` todavía coordina varias operaciones y recibe datos de las dos pantallas: extraer otra capa solo por reducir líneas añadiría más saltos entre archivos. La voz real y el diseño en un navegador físico necesitan revisión manual: las pruebas automáticas simulan la API de voz y el DOM.
 
 ## Instalar y ejecutar
 
@@ -314,6 +368,8 @@ npm run build
 
 Las pruebas no tocan tu vocabulario local. Para ejecutar solamente una parte: `npm test -w backend` o `npm test -w frontend`.
 
+Para comprobar la API con un **servidor PostgreSQL independiente**, inicia Docker y ejecuta `npm run test:postgres`. Esta orden usa la imagen `postgres:15-alpine` (la descarga si falta), crea una base temporal sin volumen en un puerto local aleatorio, aplica las migraciones dos veces y prueba colecciones, palabras, marcas, fusión, deshacer, rondas y reconexión. Al terminar detiene y elimina su propio contenedor. No usa `backend/data/` ni la base indicada en tu `.env`. Es una comprobación opcional; `npm test` sigue funcionando sin Docker.
+
 Comprobación manual recomendada:
 
 1. Selecciona Español como idioma principal e Inglés como estudio. La pareja puede estar vacía en una instalación nueva; los ejemplos originales tienen otras direcciones.
@@ -340,7 +396,7 @@ En Windows, con Node 24.14.0 y npm 11.9.0:
 - `npm run dev`: ambos servidores arrancan. Frontend HTTP 200 y API accesible a través del proxy.
 - Prueba real por HTTP: crear una palabra, detener ambos servidores, reiniciar, recuperar la palabra, editar sus dos ejemplos y borrarla (204). Al terminar quedan las seis entradas de demostración.
 - Git ignora dependencias, compilaciones, `.env` y datos locales.
-- Pendientes: revisión visual manual y prueba contra un servidor PostgreSQL independiente. No se ha desplegado ni comprobado un entorno de producción.
+- En esa fecha quedaban pendientes la revisión visual manual y la prueba contra un servidor PostgreSQL independiente; las comprobaciones posteriores se documentan debajo. No se ha desplegado ni comprobado un entorno de producción.
 
 ### Comprobación posterior en Chrome — 28 de octubre de 2026
 
@@ -354,6 +410,14 @@ Con dos tarjetas `dormir → sleep` en A1 y A2 y una base PGlite temporal, Chrom
 
 Con otra base PGlite temporal en memoria, Chrome mostró las dos tarjetas A1 y A2 y la vista previa de su unión. Se confirmó la fusión, se recargó la página y apareció **Deshacer última fusión**. Tras pulsarlo, la base volvió a contener las dos tarjetas con sus identificadores, ejemplos, notas y colecciones originales. Esta prueba cubre el recorrido real de la interfaz y la persistencia del historial durante una recarga; sigue pendiente probarlo con un servidor PostgreSQL independiente.
 
+### Comprobación con PostgreSQL independiente — 30 de octubre de 2026
+
+Con la imagen `postgres:15-alpine` en un contenedor temporal, `npm run build` terminó correctamente. La API conectó mediante `DATABASE_URL`, aplicó las seis migraciones de `002` a `007` y volvió a ejecutarlas sin duplicarlas. Por HTTP se crearon dos colecciones y dos tarjetas, se marcaron para estudio, se fusionaron con sus ejemplos y colecciones, y se deshizo la fusión recuperando las dos marcas. Se guardó una ronda y, tras cerrar y abrir una nueva conexión, seguían las dos palabras. El contenedor se eliminó al terminar. Esto verifica el backend con PostgreSQL real; la interfaz en navegador aún no se ha recorrido contra ese servidor.
+
+### Revisión para portfolio — 31 de octubre de 2026
+
+`npm test` pasó 40 pruebas del backend y 81 del frontend; `npm run build` terminó correctamente y `npm audit --audit-level=high` no encontró vulnerabilidades conocidas en esa consulta. Las capturas de Diccionario y Estudio se generaron en Chrome con seis palabras ficticias y una base PGlite temporal en memoria. Antes de subir el código se revisaron los archivos nuevos, las variables de ejemplo y los cambios pendientes para evitar publicar datos locales o secretos. Falta probar esta versión en un teléfono físico y preparar un despliegue público con autenticación.
+
 ## API
 
 | Método | Ruta | Resultado |
@@ -361,6 +425,7 @@ Con otra base PGlite temporal en memoria, Chrome mostró las dos tarjetas A1 y A
 | GET | `/api/words?sourceLanguage=es&targetLanguage=en&search=book&wordType=noun&collectionId=1` | Lista de la pareja exacta, con búsqueda, tipo y colección opcionales, 200 |
 | POST | `/api/words` o `/api/words?collectionId=1` | Crea una palabra y, opcionalmente, la añade a una colección de la misma pareja, 201 |
 | PUT | `/api/words/:id` | Reemplaza los campos de una palabra, 200 |
+| PUT | `/api/words/:id/study-mark` | Guarda `{ "mark": "known" }` o `{ "mark": "difficult" }` para esa palabra, 200 |
 | DELETE | `/api/words/:id` | Borra una palabra, 204 |
 | GET | `/api/collections?sourceLanguage=es&targetLanguage=en` | Lista de colecciones de la pareja con número de palabras, 200 |
 | POST | `/api/collections` | Crea una colección con `name`, `sourceLanguage` y `targetLanguage`, 201; nombre duplicado, 409 |
@@ -416,7 +481,7 @@ Antes de avanzar, intenta explicar ese recorrido con tus palabras y modificar un
 1. **Datos y estudio:** ampliar la recuperación a un historial visible de todas las fusiones, soporte de archivos antiguos y, si resulta útil, estadísticas por palabra. Los totales actuales son por ronda.
 2. **Preparación para uso remoto:** usuarios, autorización, paginación si crece la colección, migraciones y despliegue con PostgreSQL independiente.
 3. **Automatización:** CI/CD cuando se defina un destino de despliegue. Docker cuando sea útil reproducir el entorno entre máquinas.
-4. **Integraciones opcionales:** traducción y voz cuando aporten valor a un flujo ya probado y se hayan evaluado coste y privacidad.
+4. **Voz y tutor (propuesta futura, sin implementar):** separar tres usos. **Dictar tarjetas:** desde el móvil, decir palabra, pareja de idiomas, traducción y ejemplos; transcribir y extraer esos campos, crear la tarjeta con estado «Pendiente de revisión» y mostrar un aviso arriba para corregirla y marcarla como revisada. Las tarjetas pendientes no deberían entrar en ejercicios hasta revisarlas. **Tutor:** consultar dudas por texto y, más adelante, mantener una conversación por voz con explicaciones y ejemplos relacionados con el vocabulario guardado. **Acceso rápido:** abrir directamente la captura desde un acceso directo del móvil; estudiar por separado la viabilidad de una activación por voz en segundo plano. Antes de elegir servicios de IA, probar reconocimiento con voces reales, medir errores, coste y latencia, y decidir qué audio se envía o conserva. La aplicación actual sigue usando la voz del navegador para escuchar y hablar en los ejercicios.
 
 ## Control de versiones
 

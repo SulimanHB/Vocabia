@@ -1,4 +1,5 @@
 import express, { type ErrorRequestHandler } from 'express';
+import { z } from 'zod';
 import type { Database } from './database.js';
 import { filtersSchema, wordCreationFiltersSchema, wordSchema } from './validation.js';
 import { createCollectionsRouter } from './collections.js';
@@ -6,7 +7,7 @@ import { createImportRouter } from './importWords.js';
 import { createStudyRoundsRouter } from './studyRounds.js';
 import { createMergeRouter } from './mergeWords.js';
 
-const columns = `id, term, translation, source_language AS "sourceLanguage", target_language AS "targetLanguage", word_type AS "wordType", notes, examples, english_verb_forms AS "englishVerbForms"`;
+const columns = `id, term, translation, source_language AS "sourceLanguage", target_language AS "targetLanguage", word_type AS "wordType", notes, examples, english_verb_forms AS "englishVerbForms", study_mark AS "studyMark"`;
 
 export function createApp(db: Database) {
   const app = express();
@@ -65,6 +66,16 @@ export function createApp(db: Database) {
       res.status(400).json({ error: 'El identificador no es válido.' }); return;
     }
     next();
+  });
+
+  app.put('/api/words/:id/study-mark', async (req, res) => {
+    const parsed = z.object({ mark: z.enum(['known', 'difficult']) }).strict().safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: 'La marca de estudio no es válida.' }); return; }
+    const result = await db.query<{ id: number; studyMark: 'known' | 'difficult' }>(
+      'UPDATE words SET study_mark=$1 WHERE id=$2 RETURNING id,study_mark AS "studyMark"',
+      [parsed.data.mark, Number(req.params.id)]);
+    if (!result.rows.length) { res.status(404).json({ error: 'Esta palabra ya no existe.' }); return; }
+    res.json(result.rows[0]);
   });
 
   app.put('/api/words/:id', async (req, res) => {

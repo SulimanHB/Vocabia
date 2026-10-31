@@ -17,6 +17,7 @@ type StoredWord = {
 type WordRow = {
   id: number; term: string; translation: string; source_language: string; target_language: string;
   word_type: string; notes: string; examples: unknown; english_verb_forms: unknown; created_at: string;
+  study_mark?: 'known' | 'difficult' | null;
 };
 type Snapshot = { word: WordRow; collectionIds: number[] };
 type HistoryRow = { id: number; keep_before: Snapshot; source_before: Snapshot; keep_after: Snapshot;
@@ -32,7 +33,8 @@ async function snapshot(tx: Queryable, id: number): Promise<Snapshot | null> {
 
 async function sameSnapshot(tx: Queryable, first: Snapshot, second: Snapshot) {
   const result = await tx.query<{ same: boolean }>('SELECT $1::jsonb = $2::jsonb AS same',
-    [JSON.stringify(first), JSON.stringify(second)]);
+    [JSON.stringify({ ...first, word: { ...first.word, study_mark: first.word.study_mark ?? null } }),
+      JSON.stringify({ ...second, word: { ...second.word, study_mark: second.word.study_mark ?? null } })]);
   return result.rows[0].same;
 }
 
@@ -81,15 +83,15 @@ export function createMergeRouter(db: Database) {
         }
         const w = history.keep_before.word;
         await tx.query(`UPDATE words SET term=$1,translation=$2,source_language=$3,target_language=$4,
-          word_type=$5,notes=$6,examples=$7::jsonb,english_verb_forms=$8::jsonb,created_at=$9 WHERE id=$10`,
+          word_type=$5,notes=$6,examples=$7::jsonb,english_verb_forms=$8::jsonb,created_at=$9,study_mark=$10 WHERE id=$11`,
           [w.term, w.translation, w.source_language, w.target_language, w.word_type, w.notes,
-            JSON.stringify(w.examples), JSON.stringify(w.english_verb_forms), w.created_at, w.id]);
+            JSON.stringify(w.examples), JSON.stringify(w.english_verb_forms), w.created_at, w.study_mark ?? null, w.id]);
         if (history.source_deleted) {
           const s = history.source_before.word;
-          await tx.query(`INSERT INTO words(id,term,translation,source_language,target_language,word_type,notes,examples,english_verb_forms,created_at)
-            OVERRIDING SYSTEM VALUE VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10)`,
+          await tx.query(`INSERT INTO words(id,term,translation,source_language,target_language,word_type,notes,examples,english_verb_forms,created_at,study_mark)
+            OVERRIDING SYSTEM VALUE VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11)`,
             [s.id, s.term, s.translation, s.source_language, s.target_language, s.word_type, s.notes,
-              JSON.stringify(s.examples), JSON.stringify(s.english_verb_forms), s.created_at]);
+              JSON.stringify(s.examples), JSON.stringify(s.english_verb_forms), s.created_at, s.study_mark ?? null]);
         }
         await tx.query('DELETE FROM collection_words WHERE word_id=$1', [w.id]);
         for (const collectionId of history.keep_before.collectionIds) {

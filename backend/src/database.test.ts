@@ -26,10 +26,10 @@ describe('Migración de ejemplos', () => {
         { text: '¿Dónde está el libro?', translation: '' },
         { text: 'Ya lo sé.', translation: 'I already know.' },
       ];
-      expect(after).toEqual({ ...before, examples, english_verb_forms: {} });
+      expect(after).toEqual({ ...before, examples, english_verb_forms: {}, study_mark: null });
       await initializeDatabase(db, false);
       expect((await db.query('SELECT * FROM words')).rows[0]).toEqual(after);
-      expect((await db.query('SELECT name FROM app_migrations ORDER BY name')).rows).toEqual([{ name: '002_example_translations' }, { name: '003_english_verb_forms' }, { name: '004_collections' }, { name: '005_study_rounds' }, { name: '006_merge_history' }]);
+      expect((await db.query('SELECT name FROM app_migrations ORDER BY name')).rows).toEqual([{ name: '002_example_translations' }, { name: '003_english_verb_forms' }, { name: '004_collections' }, { name: '005_study_rounds' }, { name: '006_merge_history' }, { name: '007_word_study_mark' }]);
     } finally { await db.close(); }
   });
 

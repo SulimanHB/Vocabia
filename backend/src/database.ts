@@ -59,6 +59,11 @@ export async function initializeDatabase(db: Database, seed = true) {
     for (const statement of mergeMigration.split(';').filter(part => part.trim())) await tx.query(statement);
     await tx.query("INSERT INTO app_migrations(name) VALUES ('006_merge_history') ON CONFLICT DO NOTHING");
   });
+  const markMigration = await readFile(new URL('../../database/007_word_study_mark.sql', import.meta.url), 'utf8');
+  await db.transaction(async tx => {
+    await tx.query(markMigration);
+    await tx.query("INSERT INTO app_migrations(name) VALUES ('007_word_study_mark') ON CONFLICT DO NOTHING");
+  });
   if (!seed) return;
   const examples = [
     ['serendipity', 'casualidad afortunada', 'en', 'es', 'noun', 'Encontrar algo valioso cuando buscabas otra cosa.', ['Finding this book was pure serendipity.']],

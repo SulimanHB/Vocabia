@@ -15,6 +15,7 @@ let mergeBackup: { keep: Word; source: Word } | null;
 beforeEach(() => {
   vi.mocked(downloadExport).mockClear();
   localStorage.clear();
+  window.history.replaceState(null, '', '/');
   // jsdom no implementa los diálogos. Las pruebas simulan solo su apertura y cierre.
   HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event('close')); };
@@ -33,6 +34,13 @@ beforeEach(() => {
     if (path.pathname === '/api/study-rounds' && method === 'GET') return new Response(JSON.stringify([]));
     if (path.pathname === '/api/words/merge/latest' && method === 'GET') {
       return new Response(JSON.stringify(mergeBackup ? { id: 1, term: mergeBackup.keep.term, translation: mergeBackup.keep.translation } : null));
+    }
+    if (/^\/api\/words\/\d+\/study-mark$/.test(path.pathname) && method === 'PUT') {
+      const id = Number(path.pathname.split('/')[3]);
+      const mark = JSON.parse(options.body as string).mark;
+      const item = words.find(word => word.id === id)!;
+      item.studyMark = mark;
+      return new Response(JSON.stringify({ id, studyMark: mark }));
     }
     if (method === 'GET') {
       lastSearch = path.search;
@@ -115,6 +123,33 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('Colección de palabras', () => {
+  it('separa Diccionario y Estudio en URLs y responde a atrás y adelante', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const nav = within(screen.getByRole('navigation', { name: 'Secciones' }));
+    expect(nav.getByRole('link', { name: 'Diccionario' })).toHaveAttribute('aria-current', 'page');
+    document.documentElement.scrollTop = 480;
+    await user.click(nav.getByRole('link', { name: 'Estudio' }));
+    expect(window.location.pathname).toBe('/estudio');
+    expect(document.documentElement.scrollTop).toBe(0);
+    expect(nav.getByRole('link', { name: 'Estudio' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: '+ Nueva colección' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Palabras disponibles: 1' })).toBeVisible();
+    window.history.back();
+    await waitFor(() => expect(nav.getByRole('link', { name: 'Diccionario' })).toHaveAttribute('aria-current', 'page'));
+    expect(window.location.pathname).toBe('/');
+    window.history.forward();
+    await waitFor(() => expect(nav.getByRole('link', { name: 'Estudio' })).toHaveAttribute('aria-current', 'page'));
+    expect(window.location.pathname).toBe('/estudio');
+  });
+
+  it('abre Estudio directamente desde su URL', async () => {
+    window.history.replaceState(null, '', '/estudio');
+    render(<App />);
+    expect(screen.getByRole('navigation', { name: 'Secciones' }).querySelector('[aria-current="page"]')).toHaveTextContent('Estudio');
+    expect(await screen.findByRole('heading', { name: 'Palabras disponibles: 1' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Mi colección' })).not.toBeInTheDocument();
+  });
   it('muestra coincidencias de A1 y A2 con sus ejemplos sin modificar tarjetas', async () => {
     collections = [
       { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
@@ -442,16 +477,22 @@ describe('Colección de palabras', () => {
   it('practica solo las palabras filtradas y oculta la respuesta hasta pedirla', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.999999);
     words = [
-      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb' },
-      { ...words[0], id: 2, term: 'beber', translation: 'drink', wordType: 'verb' },
-      { ...words[0], id: 3, term: 'cansado', translation: 'tired', wordType: 'adjective' },
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', wordType: 'verb', collectionIds: [1] },
+      { ...words[0], id: 2, term: 'beber', translation: 'drink', wordType: 'verb', collectionIds: [1] },
+      { ...words[0], id: 3, term: 'cansado', translation: 'tired', wordType: 'adjective', collectionIds: [2] },
+    ];
+    collections = [
+      { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 2 },
+      { id: 2, name: 'A2', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
     ];
     const user = userEvent.setup();
     render(<App />);
     await screen.findByRole('heading', { name: 'dormir' });
-    await user.click(within(screen.getByRole('group', { name: 'Filtrar por tipo' })).getByRole('button', { name: 'Verbos' }));
+    await user.click(await within(screen.getByRole('group', { name: 'Colecciones' })).findByRole('button', { name: 'A1 2' }));
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
-    await user.click(screen.getByRole('button', { name: 'Practicar' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
+    expect(window.location.pathname).toBe('/estudio');
+    await user.click(await screen.findByRole('button', { name: 'Practicar' }));
     const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
     expect(exercise.getByRole('heading', { name: 'dormir' })).toBeVisible();
     expect(exercise.queryByText('sleep')).not.toBeInTheDocument();
@@ -461,8 +502,70 @@ describe('Colección de palabras', () => {
     await user.click(exercise.getByRole('button', { name: 'Siguiente pregunta' }));
     expect(exercise.getByRole('heading', { name: 'beber' })).toBeVisible();
     expect(exercise.queryByText('drink')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Volver a las tarjetas' }));
-    expect(screen.getAllByRole('article')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Volver a Estudio' }));
+    expect(screen.getByRole('heading', { name: 'Palabras disponibles: 2' })).toBeVisible();
+  });
+
+  it('limita el ejercicio de escucha a la colección seleccionada', async () => {
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', collectionIds: [1] },
+      { ...words[0], id: 2, term: 'beber', translation: 'drink', collectionIds: [1] },
+      { ...words[0], id: 3, term: 'correr', translation: 'run', collectionIds: [2] },
+    ];
+    collections = [
+      { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 2 },
+      { id: 2, name: 'A2', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await within(screen.getByRole('group', { name: 'Colecciones' })).findByRole('button', { name: 'A1 2' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
+    await user.click(await screen.findByRole('button', { name: 'Escuchar y elegir' }));
+    const exercise = within(screen.getByRole('region', { name: 'Escuchar y elegir' }));
+    expect(exercise.getByRole('button', { name: 'dormir' })).toBeInTheDocument();
+    expect(exercise.getByRole('button', { name: 'beber' })).toBeInTheDocument();
+    expect(exercise.queryByRole('button', { name: 'correr' })).not.toBeInTheDocument();
+  });
+
+  it('abre la práctica hablada desde Estudio con la pareja seleccionada', async () => {
+    words = [{ ...words[0], term: 'dormir', translation: 'sleep' }];
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
+    await user.click(await screen.findByRole('button', { name: 'Hablar y comprobar' }));
+    const exercise = within(screen.getByRole('region', { name: 'Hablar y comprobar' }));
+    expect(exercise.getByRole('heading', { name: 'dormir' })).toHaveAttribute('lang', 'es');
+    expect(exercise.queryByText('sleep')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Volver a Estudio' }));
+    expect(screen.getByRole('heading', { name: 'Palabras disponibles: 1' })).toBeVisible();
+  });
+
+  it('repasa solo las difíciles de la colección seleccionada y sale al resolver la última', async () => {
+    collections = [
+      { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 2 },
+      { id: 2, name: 'A2', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 },
+    ];
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', collectionIds: [1], studyMark: 'difficult' },
+      { ...words[0], id: 2, term: 'beber', translation: 'drink', collectionIds: [1], studyMark: 'known' },
+      { ...words[0], id: 3, term: 'correr', translation: 'run', collectionIds: [2], studyMark: 'difficult' },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await within(screen.getByRole('group', { name: 'Colecciones' })).findByRole('button', { name: 'A1 2' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
+    const difficultButton = await screen.findByRole('button', { name: 'Practicar las difíciles (1)' });
+    await user.click(difficultButton);
+    const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
+    expect(exercise.getByRole('heading', { name: 'dormir' })).toBeVisible();
+    expect(exercise.getByText('1 de 1')).toBeVisible();
+    await user.click(exercise.getByRole('button', { name: 'Mostrar respuesta' }));
+    await user.click(exercise.getByRole('button', { name: 'La sabía' }));
+    await waitFor(() => expect(words[0].studyMark).toBe('known'));
+    await user.click(exercise.getByRole('button', { name: 'Ver resumen' }));
+    await user.click(exercise.getByRole('button', { name: 'Nueva ronda' }));
+    expect(await screen.findByRole('button', { name: 'Practicar las difíciles (0)' })).toBeDisabled();
+    expect(screen.getByRole('heading', { name: 'Palabras disponibles: 2' })).toBeVisible();
   });
 
   it('muestra la traducción debajo de su ejemplo y conserva los idiomas del contenido', async () => {
@@ -474,6 +577,19 @@ describe('Colección de palabras', () => {
     await user.click(screen.getByRole('button', { name: 'Editar book' }));
     expect(screen.getByLabelText('Ejemplo 1')).toHaveValue('Leo un libro.');
     expect(screen.getByLabelText('Traducción del ejemplo 1')).toHaveValue('I read a book.');
+  });
+
+  it('pronuncia la traducción de la tarjeta en el idioma de estudio', async () => {
+    words = [{ ...words[0], term: 'dormir', translation: 'sleep' }];
+    const speak = vi.fn();
+    vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn() });
+    vi.stubGlobal('SpeechSynthesisUtterance', class { lang = ''; rate = 1; constructor(public text: string) {} });
+    const user = userEvent.setup();
+    render(<App />);
+    const play = await screen.findByRole('button', { name: 'Escuchar: sleep' });
+    await user.click(play);
+    expect(speak).toHaveBeenCalledOnce();
+    expect(speak.mock.calls[0][0]).toMatchObject({ text: 'sleep', lang: 'en-US', rate: 0.85 });
   });
 
   it('filtra con los marcadores de tipo, resalta el activo y permite volver a todos sin salir de la pareja', async () => {

@@ -11,6 +11,23 @@ beforeAll(async () => { await initializeDatabase(db, false); }, 30000);
 afterAll(async () => { await db.close(); });
 
 describe('API y SQL del diccionario', () => {
+  it('guarda la valoración por palabra, la conserva al editar y rechaza marcas inválidas', async () => {
+    const created = await request(app).post('/api/words').send({ ...word, term: 'marca de estudio' }).expect(201);
+    const id = created.body.id;
+    try {
+      expect(created.body.studyMark).toBeNull();
+      await request(app).put(`/api/words/${id}/study-mark`).send({ mark: 'difícil' }).expect(400);
+      await request(app).put(`/api/words/${id}/study-mark`).send({ mark: 'difficult' }).expect(200)
+        .then(response => expect(response.body).toEqual({ id, studyMark: 'difficult' }));
+      await request(app).put(`/api/words/${id}`).send({ ...word, term: 'marca de estudio', notes: 'Editada.' }).expect(200);
+      const afterEdit = (await request(app).get('/api/words').expect(200)).body.find((item: { id: number }) => item.id === id);
+      expect(afterEdit).toMatchObject({ studyMark: 'difficult', notes: 'Editada.' });
+      await request(app).put(`/api/words/${id}/study-mark`).send({ mark: 'known' }).expect(200);
+      const afterMark = (await request(app).get('/api/words').expect(200)).body.find((item: { id: number }) => item.id === id);
+      expect(afterMark.studyMark).toBe('known');
+    } finally { await request(app).delete(`/api/words/${id}`).expect(204); }
+    await request(app).put(`/api/words/${id}/study-mark`).send({ mark: 'difficult' }).expect(404);
+  });
   it('importa una palabra coincidente en A2 sin alterar la tarjeta de A1', async () => {
     const a1 = await request(app).post('/api/collections').send({ name: 'A1 coincidencias', sourceLanguage: 'es', targetLanguage: 'en' }).expect(201);
     const original = await request(app).post(`/api/words?collectionId=${a1.body.id}`).send({
