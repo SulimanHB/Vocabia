@@ -61,7 +61,7 @@ describe('API y SQL del diccionario', () => {
   });
 
   it('importa con omisión de coincidencias, reutiliza colecciones y no sobrescribe palabras', async () => {
-    const existingCollection = await request(app).post('/api/collections').send({ name: 'A1 importación', sourceLanguage: 'es', targetLanguage: 'en' }).expect(201);
+    await request(app).post('/api/collections').send({ name: 'A1 importación', sourceLanguage: 'es', targetLanguage: 'en' }).expect(201);
     const existingWord = await request(app).post('/api/words').send({ ...word, term: 'importar dormir', translation: 'sleep', sourceLanguage: 'es', targetLanguage: 'en', notes: 'Nota original.' }).expect(201);
     const document = {
       format: 'vocabia-words', version: 2, exportedAt: '2026-10-28T10:00:00.000Z',

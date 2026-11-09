@@ -19,6 +19,7 @@ export function CollectionsPanel({ referenceLanguage, studyLanguage, selectedId,
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [actionError, setActionError] = useState<unknown>(null);
+  const [actionErrorContext, setActionErrorContext] = useState<'page' | 'add' | 'delete'>('page');
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,7 @@ export function CollectionsPanel({ referenceLanguage, studyLanguage, selectedId,
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!name.trim()) return;
+    setActionErrorContext('page');
     setBusy(true);
     setActionError(null);
     try {
@@ -66,6 +68,7 @@ export function CollectionsPanel({ referenceLanguage, studyLanguage, selectedId,
 
   async function openAddDialog() {
     if (selectedId === null) return;
+    setActionErrorContext('add');
     setActionError(null);
     setAvailable([]);
     setChosenWordId('');
@@ -84,6 +87,7 @@ export function CollectionsPanel({ referenceLanguage, studyLanguage, selectedId,
   async function addWord(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (selectedId === null || !chosenWordId) return;
+    setActionErrorContext('add');
     setBusy(true);
     setActionError(null);
     try {
@@ -96,6 +100,7 @@ export function CollectionsPanel({ referenceLanguage, studyLanguage, selectedId,
 
   async function deleteCollection() {
     if (selectedId === null) return;
+    setActionErrorContext('delete');
     setBusy(true);
     setActionError(null);
     try {
@@ -116,7 +121,7 @@ export function CollectionsPanel({ referenceLanguage, studyLanguage, selectedId,
     </form>}
     {loading && <p className="collection-loading" role="status">{copy.loading}</p>}
     {error !== null && <p className="error" role="alert">{getErrorMessage(error, ui)} <button type="button" className="text-button" onClick={() => onMutation()}>{ui.retry}</button></p>}
-    {actionError !== null && !addDialog.current?.open && !deleteDialog.current?.open && <p className="error" role="alert">{getErrorMessage(actionError, ui)}</p>}
+    {actionError !== null && actionErrorContext === 'page' && <p className="error" role="alert">{getErrorMessage(actionError, ui)}</p>}
     <div className="collection-tabs" role="group" aria-label={copy.title}>
       <button type="button" aria-pressed={selectedId === null} onClick={() => onSelect(null)}>{copy.all}</button>
       {collections.map(collection => <button type="button" key={collection.id} aria-pressed={selectedId === collection.id} onClick={() => onSelect(collection.id)}>{collection.name} <span>{collection.wordCount}</span></button>)}
@@ -129,11 +134,11 @@ export function CollectionsPanel({ referenceLanguage, studyLanguage, selectedId,
         <div className="form-actions"><button type="button" className="secondary" disabled={busy} onClick={() => addDialog.current?.close()}>{ui.cancel}</button><button className="primary" disabled={busy || !chosenWordId}>{copy.add}</button></div>
       </form>}
       {(availableLoading || choices.length === 0) && <div className="form-actions"><button type="button" className="secondary" onClick={() => addDialog.current?.close()}>{ui.done}</button></div>}
-      {actionError !== null && <p className="error" role="alert">{getErrorMessage(actionError, ui)}</p>}
+      {actionError !== null && actionErrorContext === 'add' && <p className="error" role="alert">{getErrorMessage(actionError, ui)}</p>}
     </dialog>
     <dialog ref={deleteDialog} className="confirm-dialog" aria-labelledby="delete-collection-title" onCancel={event => { if (busy) event.preventDefault(); }}>
       <h2 id="delete-collection-title">{copy.deleteTitle}</h2><p>{copy.deleteDescription}</p>
-      {actionError !== null && <p className="error" role="alert">{getErrorMessage(actionError, ui)}</p>}
+      {actionError !== null && actionErrorContext === 'delete' && <p className="error" role="alert">{getErrorMessage(actionError, ui)}</p>}
       <div className="form-actions"><button type="button" className="secondary" disabled={busy} onClick={() => deleteDialog.current?.close()}>{ui.cancel}</button><button type="button" className="danger" disabled={busy} onClick={() => void deleteCollection()}>{copy.confirmDelete}</button></div>
     </dialog>
   </section>;

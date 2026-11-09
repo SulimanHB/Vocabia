@@ -123,6 +123,33 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('Colección de palabras', () => {
+  it('lleva de la introducción a una tarjeta y después a Estudio', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    const tryCard = await screen.findByRole('link', { name: 'Ver una tarjeta' });
+    expect(tryCard).toHaveAttribute('href', '#word-list');
+    await user.click(tryCard);
+    expect(window.location.hash).toBe('#word-list');
+    expect(document.getElementById('word-list')).toHaveTextContent('A book.');
+    expect(document.getElementById('word-list')?.tagName).toBe('ARTICLE');
+    expect(screen.getByText('Lee un ejemplo o escucha la palabra.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'book' })).toBeVisible();
+    await user.click(screen.getByRole('link', { name: 'Practicar estas palabras' }));
+    expect(window.location.pathname).toBe('/estudio');
+    expect(await screen.findByRole('heading', { name: 'Palabras disponibles: 1' })).toBeVisible();
+  });
+
+  it('ofrece añadir la primera palabra si la colección está vacía', async () => {
+    words = [];
+    const user = userEvent.setup();
+    render(<App />);
+    const intro = document.querySelector('.intro');
+    expect(intro).not.toBeNull();
+    await waitFor(() => expect(within(intro as HTMLElement).getByRole('button', { name: 'Añadir palabra' })).toBeVisible());
+    await user.click(within(intro as HTMLElement).getByRole('button', { name: 'Añadir palabra' }));
+    expect(screen.getByRole('dialog', { name: 'Una nueva palabra' })).toBeVisible();
+  });
+
   it('separa Diccionario y Estudio en URLs y responde a atrás y adelante', async () => {
     const user = userEvent.setup();
     render(<App />);

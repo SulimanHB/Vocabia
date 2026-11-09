@@ -7,9 +7,11 @@ import { interfaceText, formatText, type UiKey } from './interfaceText';
 import { DictionaryPage } from './DictionaryPage';
 import { StudyPage } from './StudyPage';
 import { appNavigationText } from './appNavigationText';
+import { demoText } from './demoText';
 
 const referenceLanguageKey = 'vocabia.referenceLanguage';
 const studyLanguageKey = 'vocabia.studyLanguage';
+const isDemo = import.meta.env.MODE === 'demo';
 type AppView = 'dictionary' | 'study';
 const readView = (): AppView => window.location.pathname === '/estudio' ? 'study' : 'dictionary';
 
@@ -67,10 +69,15 @@ export function App() {
   }
 
   useEffect(() => {
-    const onPopState = () => { setLoading(true); setView(readView()); };
+    const onPopState = () => {
+      const nextView = readView();
+      if (nextView === view) return;
+      setLoading(true);
+      setView(nextView);
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  }, [view]);
 
   function changeReferenceLanguage(value: WordInput['targetLanguage']) {
     const nextStudyLanguage = studyLanguage === value ? (value === 'en' ? 'es' : 'en') : studyLanguage;
@@ -148,11 +155,12 @@ export function App() {
   return <>
     <header className="topbar"><a className="brand" href="/" aria-label={ui.home} onClick={event => followInternalLink(event, 'dictionary')}><span className="brand-mark" aria-hidden="true">v.</span>vocabia<span className="brand-dot">.</span></a><span className="top-caption" lang={referenceLanguage}>{text.tagline}</span><nav className="app-nav" aria-label={navCopy.nav}><a href="/" aria-current={view === 'dictionary' ? 'page' : undefined} onClick={event => followInternalLink(event, 'dictionary')}>{navCopy.dictionary}</a><a href="/estudio" aria-current={view === 'study' ? 'page' : undefined} onClick={event => followInternalLink(event, 'study')}>{navCopy.study}</a></nav><span className="personal-badge" lang={referenceLanguage}>{text.personalSpace}</span></header>
     <main>
+      {isDemo && <p className="demo-banner" role="note" lang={referenceLanguage}>{demoText[referenceLanguage]}</p>}
       {view === 'dictionary' ? <DictionaryPage referenceLanguage={referenceLanguage} studyLanguage={studyLanguage}
         selectedCollectionId={selectedCollectionId} revision={revision} words={visibleWords} loading={loading} error={error} notice={notice}
         search={search} wordType={wordType}
         onStudyLanguageChange={changeStudyLanguage} onCollectionChange={setSelectedCollectionId} onRefresh={() => setRevision(value => value + 1)}
-        onSearchChange={setSearch} onWordTypeChange={setWordType} onNotice={setNotice} onAddWord={() => openEditor(null)} onEditWord={openEditor}
+        onSearchChange={setSearch} onWordTypeChange={setWordType} onNotice={setNotice} onAddWord={() => openEditor(null)} onGoStudy={event => followInternalLink(event, 'study')} onEditWord={openEditor}
         onDeleteWord={selected => { setDeleting(selected); confirmation.current?.showModal(); }} /> : <StudyPage key={`${referenceLanguage}-${studyLanguage}`} referenceLanguage={referenceLanguage} studyLanguage={studyLanguage}
         selectedCollectionId={selectedCollectionId} revision={revision} words={visibleWords} loading={loading} error={error}
         onStudyLanguageChange={changeStudyLanguage} onCollectionChange={setSelectedCollectionId} onRetry={() => setRevision(value => value + 1)}

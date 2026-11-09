@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { getErrorMessage, request, type Collection, type Word, type WordInput } from './model';
 import { interfaceText, formatText, type UiKey } from './interfaceText';
 import { presentation } from './presentation';
@@ -8,6 +8,7 @@ import { FindMatches } from './FindMatches';
 import { ImportPreview } from './ImportPreviewDialog';
 import { WordCard } from './WordCard';
 import { downloadExport } from './exportWords';
+import { appNavigationText } from './appNavigationText';
 
 interface Props {
   referenceLanguage: WordInput['sourceLanguage'];
@@ -27,19 +28,21 @@ interface Props {
   onWordTypeChange: (wordType: string) => void;
   onNotice: (notice: UiKey | null) => void;
   onAddWord: () => void;
+  onGoStudy: (event: MouseEvent<HTMLAnchorElement>) => void;
   onEditWord: (word: Word) => void;
   onDeleteWord: (word: Word) => void;
 }
 
 export function DictionaryPage({ referenceLanguage, studyLanguage, selectedCollectionId, revision, words, loading, error, notice,
   search, wordType, onStudyLanguageChange, onCollectionChange, onRefresh, onSearchChange, onWordTypeChange,
-  onNotice, onAddWord, onEditWord, onDeleteWord }: Props) {
+  onNotice, onAddWord, onGoStudy, onEditWord, onDeleteWord }: Props) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState(false);
   const [membershipError, setMembershipError] = useState<unknown>(null);
   const [membershipBusyId, setMembershipBusyId] = useState<number | null>(null);
   const ui = interfaceText[referenceLanguage];
   const text = presentation[referenceLanguage];
+  const guide = appNavigationText[referenceLanguage];
   const filtered = Boolean(search || wordType || selectedCollectionId !== null);
 
   async function exportCollection() {
@@ -70,7 +73,11 @@ export function DictionaryPage({ referenceLanguage, studyLanguage, selectedColle
 
   return <>
     <section className="intro" lang={referenceLanguage}>
-      <div><p className="eyebrow">{text.eyebrow}</p><h1>{text.title}<br /><em>{text.titleAccent}</em></h1><p className="intro-copy">{text.introduction}<br className="desktop-break" /> {text.invitation}</p></div>
+      <div><h1>{text.title}<br /><em>{text.titleAccent}</em></h1><p className="intro-copy">{text.introduction}<br className="desktop-break" /> {text.invitation}</p>
+        {!loading && error === null && (words.length > 0
+          ? <a className="primary intro-action" href="#word-list">{guide.tryCard} <span aria-hidden="true">↓</span></a>
+          : <button className="primary intro-action" type="button" onClick={onAddWord}>{ui.addWord}</button>)}
+      </div>
       <div className="word-art" aria-hidden="true"><span className="art-small">{text.artCaption}</span><span className="art-word">hello<span>hola</span></span><span className="art-bottom">bonjour · ciao · hallo · olá</span></div>
     </section>
     <StudyLanguages referenceLanguage={referenceLanguage} studyLanguage={studyLanguage} onChange={onStudyLanguageChange} />
@@ -102,9 +109,11 @@ export function DictionaryPage({ referenceLanguage, studyLanguage, selectedColle
       {error !== null && <div className="error" role="alert">{getErrorMessage(error, ui)} <button type="button" className="text-button" onClick={onRefresh}>{ui.retry}</button></div>}
       {loading ? <div className="empty" role="status">{ui.preparing}</div> : error ? null : words.length === 0 ? <div className="empty">
         <h3>{filtered ? ui.noMatches : ui.emptyTitle}</h3><p>{filtered ? ui.noMatchesHelp : ui.emptyHelp}</p>
-      </div> : <div className="word-grid">{words.map(word => <WordCard key={word.id} word={word} interfaceLanguage={referenceLanguage}
+      </div> : <><div className="first-try-line">
+        <p>{guide.tryCardHint}</p><a href="/estudio" onClick={onGoStudy}>{guide.practiceWords} <span aria-hidden="true">→</span></a>
+      </div><div className="word-grid">{words.map((word, index) => <WordCard key={word.id} word={word} anchorId={index === 0 ? 'word-list' : undefined} interfaceLanguage={referenceLanguage}
         inCollection={selectedCollectionId !== null} removing={membershipBusyId === word.id} onRemoveFromCollection={id => { void removeFromCollection(id); }}
-        onEdit={onEditWord} onDelete={onDeleteWord} />)}</div>}
+        onEdit={onEditWord} onDelete={onDeleteWord} />)}</div></>}
     </section>
   </>;
 }

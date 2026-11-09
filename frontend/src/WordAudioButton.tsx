@@ -12,12 +12,14 @@ const audioText: Record<WordInput['sourceLanguage'], { listen: string; unsupport
   ja: { listen: '聞く', unsupported: 'このブラウザーでは音声を利用できません', error: '単語を再生できませんでした。' },
 };
 
-export function WordAudioButton({ text, language, interfaceLanguage }: {
+export function WordAudioButton({ text, language, interfaceLanguage, context, compact = false }: {
   text: string; language: WordInput['targetLanguage']; interfaceLanguage: WordInput['sourceLanguage'];
+  context?: string; compact?: boolean;
 }) {
   const [error, setError] = useState(false);
   const activeSpeech = useRef<SpeechSynthesisUtterance | null>(null);
   const labels = audioText[interfaceLanguage];
+  const actionLabel = `${labels.listen}${context ? ` ${context}` : ''}: ${text}`;
   const supported = canSpeak();
 
   function play() {
@@ -32,8 +34,8 @@ export function WordAudioButton({ text, language, interfaceLanguage }: {
   }
 
   return <>
-    <button type="button" className="word-audio-button" disabled={!supported} title={supported ? `${labels.listen}: ${text}` : labels.unsupported}
-      aria-label={`${labels.listen}: ${text}`} onClick={play}><span aria-hidden="true">♪</span>{labels.listen}</button>
+    <button type="button" className={`word-audio-button${compact ? ' compact' : ''}`} disabled={!supported} title={supported ? actionLabel : labels.unsupported}
+      aria-label={actionLabel} onClick={play}><span aria-hidden="true">♪</span>{!compact && labels.listen}</button>
     {error && <span className="word-audio-error" role="alert">{labels.error}</span>}
   </>;
 }
