@@ -43,7 +43,8 @@ describe('demo pública', () => {
   }, 30000);
 
   it('declara que los datos de la demo son temporales', async () => {
-    await request(demo.app).get('/api/demo-info').expect(200, { demo: true, temporary: true });
+    const info = await request(demo.app).get('/api/demo-info').expect(200, { demo: true, temporary: true });
+    expect(info.headers['set-cookie']).toBeUndefined();
   });
 
   it('solo responde 503 cuando todas las sesiones están atendiendo una petición', async () => {
