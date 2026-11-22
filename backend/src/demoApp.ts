@@ -18,27 +18,37 @@ interface DemoSession {
   activeRequests: number;
 }
 
+// Pareja inversa inglés → español: con la interfaz en inglés, la demo no aparece vacía.
+const seedWords = [
+  ...demoWords.map(word => ({ ...word, sourceLanguage: 'es' as const })),
+  ...demoWords.filter(word => word.targetLanguage === 'en').map(word => ({
+    ...word, sourceLanguage: 'en' as const, targetLanguage: 'es' as const, term: word.translation, translation: word.term,
+    examples: word.examples.map(([text, translation]): [string, string] => [translation, text]),
+    englishVerbForms: undefined, // las formas inglesas solo se muestran cuando el inglés es la traducción
+  })),
+];
+
 async function createSession(): Promise<DemoSession> {
   const db = new PGlite();
   try {
     await initializeDatabase(db, false);
     await db.transaction(async tx => {
       const collections = new Map<string, number>();
-      for (const word of demoWords) {
+      for (const word of seedWords) {
         const inserted = await tx.query<{ id: number }>(
           `INSERT INTO words(term,translation,source_language,target_language,word_type,notes,examples,english_verb_forms)
-           VALUES ($1,$2,'es',$3,$4,'',$5::jsonb,$6::jsonb) RETURNING id`,
-          [word.term, word.translation, word.targetLanguage, word.wordType,
+           VALUES ($1,$2,$3,$4,$5,'',$6::jsonb,$7::jsonb) RETURNING id`,
+          [word.term, word.translation, word.sourceLanguage, word.targetLanguage, word.wordType,
             JSON.stringify(word.examples.map(([text, translation]) => ({ text, translation }))),
             JSON.stringify(word.englishVerbForms ?? {})],
         );
         for (const name of word.collections) {
-          const key = `${word.targetLanguage}:${name}`;
+          const key = `${word.sourceLanguage}:${word.targetLanguage}:${name}`;
           let collectionId = collections.get(key);
           if (collectionId === undefined) {
             const created = await tx.query<{ id: number }>(
-              'INSERT INTO collections(name,source_language,target_language) VALUES ($1,\'es\',$2) RETURNING id',
-              [name, word.targetLanguage],
+              'INSERT INTO collections(name,source_language,target_language) VALUES ($1,$2,$3) RETURNING id',
+              [name, word.sourceLanguage, word.targetLanguage],
             );
             collectionId = created.rows[0].id;
             collections.set(key, collectionId);

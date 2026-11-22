@@ -30,10 +30,21 @@ describe('demo pública', () => {
     expect(secondCollection.body).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'A1', wordCount: 14 }), expect.objectContaining({ name: 'Viajes', wordCount: 4 })]));
   }, 30000);
 
+  it('ofrece la pareja inversa inglés → español para quien usa la interfaz en inglés', async () => {
+    const visitor = request.agent(demo.app);
+    const words = await visitor.get('/api/words').query({ sourceLanguage: 'en', targetLanguage: 'es' }).expect(200);
+    expect(words.body).toHaveLength(20);
+    const sleep = words.body.find((word: { term: string }) => word.term === 'sleep');
+    expect(sleep).toMatchObject({ translation: 'dormir', wordType: 'verb', englishVerbForms: {},
+      examples: [{ text: 'I need to sleep.', translation: 'Necesito dormir.' }, { text: 'The baby sleeps.', translation: 'El bebé duerme.' }] });
+    const collections = await visitor.get('/api/collections').query({ sourceLanguage: 'en', targetLanguage: 'es' }).expect(200);
+    expect(collections.body.map((c: { name: string; wordCount: number }) => `${c.name} ${c.wordCount}`).sort()).toEqual(['A1 14', 'A2 6', 'Viajes 4']);
+  }, 30000);
+
   it('ofrece palabras con ejemplos en cada idioma de estudio', async () => {
     const visitor = request.agent(demo.app);
     const all = await visitor.get('/api/words').expect(200);
-    expect(all.body).toHaveLength(40);
+    expect(all.body).toHaveLength(60);
     for (const language of ['fr', 'de', 'it', 'pt', 'ja']) {
       const response = await visitor.get('/api/words').query({ sourceLanguage: 'es', targetLanguage: language }).expect(200);
       expect(response.body).toHaveLength(4);
