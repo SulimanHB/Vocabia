@@ -104,7 +104,7 @@ describe('demo pública', () => {
   }, 30000);
 
   it('envía cabeceras de seguridad', async () => {
-    const page = await request(demo.app).get('/');
+    const page = await request(demo.app).get('/api/demo-info');
     expect(page.headers['x-content-type-options']).toBe('nosniff');
     expect(page.headers['referrer-policy']).toBe('same-origin');
     expect(page.headers['content-security-policy']).toBe(
