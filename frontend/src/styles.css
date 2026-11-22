@@ -43,6 +43,9 @@ button {
 h1,h2,h3,p {
   margin: 0;
 }
+p {
+  text-wrap: pretty;
+}
 .topbar {
   height: 88px;
   border-bottom: 1px solid #e2e6de;
@@ -325,6 +328,10 @@ h2 {
   font-size: 13px;
 }
 .first-try-line a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
   color: #24634f;
   font-weight: 700;
   text-decoration: underline;
@@ -362,7 +369,7 @@ h2 {
 }
 .language-pair {
   font-size: 11px;
-  color: #899384;
+  color: #5f6a5a;
   white-space: nowrap;
 }
 .language-pair>span {
