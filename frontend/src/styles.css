@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;600;650;700&family=Libre+Caslon+Display&display=swap');
 :root {
   font-family: 'DM Sans',system-ui,sans-serif;
   color: #263c34;
@@ -23,11 +22,12 @@ button {
   cursor: pointer;
 }
 button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: .6;
 }
+/* Único estilo de foco: ~5,5:1 sobre los fondos claros (el ámbar anterior rondaba 3:1). */
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {
-  outline: 3px solid #bd8133;
+  outline: 3px solid #1b6b8b;
   outline-offset: 3px;
 }
 button {
@@ -1064,10 +1064,6 @@ body {
   font-size: 17px;
   line-height: 1;
 }
-button:focus-visible {
-  outline: 3px solid #1b6b8b;
-  outline-offset: 2px;
-}
 .practice-toggle {
   display: flex;
   justify-content: flex-end;
@@ -2042,7 +2038,6 @@ button:focus-visible {
 }
 .practice-difficult-button:disabled {
   opacity: .55;
-  cursor: not-allowed;
 }
 .practice-mark-actions {
   display: flex;
@@ -2300,9 +2295,6 @@ button:focus-visible {
 .word-audio-button:hover:not(:disabled) {
   background: #fff;
   border-color: #678f73;
-}
-.word-audio-button:disabled {
-  cursor: not-allowed;
 }
 .word-audio-button span {
   font-size: 18px;
