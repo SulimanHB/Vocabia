@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Database, Queryable } from './database.js';
-import { languages, wordSchema } from './validation.js';
+import { pairSchema, validId, wordSchema } from './validation.js';
 
 const requestSchema = z.object({
   keepId: z.number().int().positive().max(2147483647),
@@ -38,9 +38,6 @@ async function sameSnapshot(tx: Queryable, first: Snapshot, second: Snapshot) {
   return result.rows[0].same;
 }
 
-const pairSchema = z.object({ sourceLanguage: z.enum(languages), targetLanguage: z.enum(languages) })
-  .strict().refine(pair => pair.sourceLanguage !== pair.targetLanguage);
-
 const normalized = (value: string) => value.trim().normalize('NFC').toLowerCase();
 
 class MergeFailure extends Error {
@@ -60,10 +57,8 @@ export function createMergeRouter(db: Database) {
   });
 
   router.post('/:id/undo', async (req, res) => {
+    if (!validId(req.params.id)) { res.status(400).json({ error: 'El identificador no es válido.' }); return; }
     const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id < 1 || id > 2147483647) {
-      res.status(400).json({ error: 'El identificador no es válido.' }); return;
-    }
     try {
       const restored = await db.transaction(async tx => {
         const result = await tx.query<HistoryRow>(`SELECT id,keep_before,source_before,keep_after,source_deleted,undone_at

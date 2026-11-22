@@ -1,14 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import type { Database } from './database.js';
-import { languages } from './validation.js';
+import { pairSchema } from './validation.js';
 
-const pair = z.object({
-  sourceLanguage: z.enum(languages),
-  targetLanguage: z.enum(languages),
-}).strict().refine(value => value.sourceLanguage !== value.targetLanguage);
-
-const round = pair.safeExtend({
+const round = pairSchema.safeExtend({
   questionCount: z.number().int().min(1).max(100000),
   writtenCount: z.number().int().min(0).max(100000),
   matchedCount: z.number().int().min(0).max(100000),
@@ -21,7 +16,7 @@ const columns = `id, source_language AS "sourceLanguage", target_language AS "ta
 export function createStudyRoundsRouter(db: Database) {
   const router = Router();
   router.get('/', async (req, res) => {
-    const parsed = pair.safeParse(req.query);
+    const parsed = pairSchema.safeParse(req.query);
     if (!parsed.success) { res.status(400).json({ error: 'Indica dos idiomas distintos y válidos.' }); return; }
     const { sourceLanguage, targetLanguage } = parsed.data;
     const result = await db.query(`SELECT ${columns} FROM study_rounds

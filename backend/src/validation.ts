@@ -3,6 +3,12 @@ import { z } from 'zod';
 export const languages = ['es', 'en', 'fr', 'de', 'it', 'pt', 'ja'] as const;
 export const wordTypes = ['noun', 'verb', 'adjective', 'adverb', 'expression', 'other'] as const;
 
+// Entero decimal positivo dentro del rango de INTEGER de Postgres (rechaza 0x10, 1e1, 01…).
+export const validId = (value: string | undefined) => /^[1-9]\d*$/.test(value ?? '') && Number(value) <= 2147483647;
+
+export const pairSchema = z.object({ sourceLanguage: z.enum(languages), targetLanguage: z.enum(languages) })
+  .strict().refine(pair => pair.sourceLanguage !== pair.targetLanguage);
+
 const exampleText = z.string().trim().min(1).max(500);
 const exampleSchema = z.object({
   text: exampleText,

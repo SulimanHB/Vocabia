@@ -1,7 +1,7 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { z } from 'zod';
 import type { Database } from './database.js';
-import { filtersSchema, wordCreationFiltersSchema, wordSchema } from './validation.js';
+import { filtersSchema, validId, wordCreationFiltersSchema, wordSchema } from './validation.js';
 import { createCollectionsRouter } from './collections.js';
 import { createImportRouter } from './importWords.js';
 import { createStudyRoundsRouter } from './studyRounds.js';
@@ -68,7 +68,7 @@ export function createApp(db: Database, { importLimit = { bytes: '3mb', words: 5
   });
 
   app.use('/api/words/:id', (req, res, next) => {
-    if (!/^[1-9]\d*$/.test(req.params.id ?? '') || !Number.isSafeInteger(Number(req.params.id)) || Number(req.params.id) > 2147483647) {
+    if (!validId(req.params.id)) {
       res.status(400).json({ error: 'El identificador no es válido.' }); return;
     }
     next();

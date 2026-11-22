@@ -100,3 +100,9 @@ it('rechaza tarjetas distintas y revierte la actualización si falla la relació
   expect(after.find((item: { id: number }) => item.id === keep.body.id).notes).toBe('Nota A1');
   expect(after.some((item: { id: number }) => item.id === source.body.id)).toBe(true);
 });
+
+it('rechaza identificadores de deshacer con formato no decimal', async () => {
+  for (const id of ['0x10', '1e1', '01', '2147483648']) {
+    await request(app).post(`/api/words/merge/${id}/undo`).set('Content-Type', 'application/json').expect(400);
+  }
+});
