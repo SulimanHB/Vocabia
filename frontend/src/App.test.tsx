@@ -14,7 +14,7 @@ let collections: Collection[];
 let lastSearch = '';
 let mergeBackup: { keep: Word; source: Word } | null;
 beforeEach(() => {
-  vi.mocked(downloadExport).mockClear();
+  vi.mocked(downloadExport).mockClear().mockReturnValue(true);
   localStorage.clear();
   window.history.replaceState(null, '', '/');
   // jsdom no implementa los diálogos. Las pruebas simulan solo su apertura y cierre.
@@ -372,6 +372,15 @@ describe('Colección de palabras', () => {
     await waitFor(() => expect(downloadExport).toHaveBeenCalledWith(words, collections));
     expect(lastSearch).toBe('');
     expect(screen.getByText('Archivo de colecciones preparado.')).toBeVisible();
+  });
+
+  it('avisa si el archivo exportado no se podrá volver a importar entero', async () => {
+    vi.mocked(downloadExport).mockReturnValue(false);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    await user.click(screen.getByRole('button', { name: 'Exportar colecciones' }));
+    expect(await screen.findByText(/supera el límite de importación/)).toBeVisible();
   });
 
   it('previsualiza un JSON exportado sin enviar datos ni cambiar las tarjetas', async () => {

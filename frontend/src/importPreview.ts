@@ -1,7 +1,8 @@
 import { languages, wordTypes, type EnglishVerbForms, type Example, type WordInput } from './model';
 
-export const maxImportBytes = 2 * 1024 * 1024;
-const maxWords = 5000;
+// Por debajo de los 3 MB del backend: la petición de importación añade un pequeño envoltorio al documento.
+export const maxImportBytes = Math.floor(2.9 * 1024 * 1024);
+export const maxWords = 5000;
 const maxCollections = 500;
 
 type Language = WordInput['sourceLanguage'];

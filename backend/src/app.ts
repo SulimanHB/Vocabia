@@ -12,6 +12,12 @@ const columns = `id, term, translation, source_language AS "sourceLanguage", tar
 export function createApp(db: Database, { importLimit = { bytes: '3mb', words: 5000 } } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // CSRF: un formulario o fetch "simple" de otra web no puede enviar application/json sin preflight CORS.
+  app.use((req, res, next) => {
+    const type = req.headers['content-type']?.split(';')[0].trim().toLowerCase();
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || type === 'application/json') { next(); return; }
+    res.status(415).json({ error: 'Las escrituras deben enviarse como application/json.' });
+  });
   app.use('/api/import', express.json({ limit: importLimit.bytes }), createImportRouter(db, importLimit.words));
   app.use(express.json({ limit: '32kb' }));
   app.use('/api/collections', createCollectionsRouter(db));
