@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Word, WordInput } from './model';
 import { canRecognize, createRecognition, type BrowserRecognition } from './speechRecognition';
 import { speechLocale } from './speech';
-import { normalizeSpokenAnswer } from './studyAnswers';
+import { matchesStudyAnswer, normalizeSpokenAnswer } from './studyAnswers';
 import { shuffle } from './shuffle';
 
 const retryText: Record<WordInput['sourceLanguage'], { retry: string; hint: string }> = {
@@ -79,7 +79,7 @@ export function SpeakingExercise({ words, language, studyLanguage }: {
         try { recognition.stop(); } catch { /* Ya tenemos el resultado final. */ }
         setListening(false);
         setTranscript(heard);
-        const correct = normalizeSpokenAnswer(heard, studyLanguage) === normalizeSpokenAnswer(word.translation, studyLanguage);
+        const correct = matchesStudyAnswer(heard, word.translation, studyLanguage, normalizeSpokenAnswer);
         if (correct) {
           setMatches(true);
           setCorrectCount(count => count + 1);

@@ -3,7 +3,7 @@ import { request, type StudyRound, type Word, type WordInput } from './model';
 import { verbFormsText } from './verbFormsText';
 import { StudyHistory } from './StudyHistory';
 import { studyMarkText } from './studyMarkText';
-import { normalizeStudyAnswer } from './studyAnswers';
+import { matchesStudyAnswer } from './studyAnswers';
 import { shuffle } from './shuffle';
 
 export const studyModeText: Record<WordInput['sourceLanguage'], {
@@ -158,7 +158,7 @@ export function StudyMode({ words, language, studyLanguage, difficultOnly = fals
   function checkAnswer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!answer.trim() || revealed) return;
-    const correct = normalizeStudyAnswer(answer, word.targetLanguage) === normalizeStudyAnswer(question.expected, word.targetLanguage);
+    const correct = matchesStudyAnswer(answer, question.expected, word.targetLanguage);
     setMatches(correct);
     setWrittenCount(count => count + 1);
     if (correct) setMatchedCount(count => count + 1);
