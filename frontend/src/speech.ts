@@ -16,13 +16,13 @@ export function stopSpeaking(): void {
   window.speechSynthesis?.cancel();
 }
 
-export function speakText(text: string, language: WordInput['targetLanguage'], onError: () => void): SpeechSynthesisUtterance | null {
+export function speakText(text: string, language: WordInput['targetLanguage'], onError: () => void, rate = 0.85): SpeechSynthesisUtterance | null {
   if (!canSpeak()) return null;
   try {
     stopSpeaking();
     const utterance = new window.SpeechSynthesisUtterance(text);
     utterance.lang = speechLocale(language);
-    utterance.rate = 0.85;
+    utterance.rate = rate;
     // Cambiar de palabra cancela la voz anterior; eso no es un fallo de audio.
     utterance.onerror = event => {
       if (event.error !== 'canceled' && event.error !== 'interrupted') onError();

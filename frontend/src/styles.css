@@ -2556,6 +2556,19 @@ dialog::backdrop {
   min-width: 44px;
   padding: 6px;
 }
+.word-audio-slow svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.word-audio-slow circle {
+  fill: currentColor;
+  stroke: none;
+}
 .verb-present-label {
   color: var(--c-4d6070);
   font-size: 11px;
