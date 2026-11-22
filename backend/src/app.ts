@@ -9,10 +9,10 @@ import { createMergeRouter } from './mergeWords.js';
 
 const columns = `id, term, translation, source_language AS "sourceLanguage", target_language AS "targetLanguage", word_type AS "wordType", notes, examples, english_verb_forms AS "englishVerbForms", study_mark AS "studyMark"`;
 
-export function createApp(db: Database) {
+export function createApp(db: Database, { importLimit = { bytes: '3mb', words: 5000 } } = {}) {
   const app = express();
   app.disable('x-powered-by');
-  app.use('/api/import', express.json({ limit: '3mb' }), createImportRouter(db));
+  app.use('/api/import', express.json({ limit: importLimit.bytes }), createImportRouter(db, importLimit.words));
   app.use(express.json({ limit: '32kb' }));
   app.use('/api/collections', createCollectionsRouter(db));
   app.use('/api/study-rounds', createStudyRoundsRouter(db));

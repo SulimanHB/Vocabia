@@ -46,12 +46,13 @@ function validateWords(rawWords: unknown[], collections: CollectionInput[]): Imp
   return words;
 }
 
-export function createImportRouter(db: Database) {
+export function createImportRouter(db: Database, maxWords = 5000) {
   const router = Router();
   router.post('/', async (req, res) => {
     const parsed = requestSchema.safeParse(req.body);
     if (!parsed.success) { res.status(400).json({ error: 'El archivo o la opción de importación no son válidos.' }); return; }
     const { document, mode } = parsed.data;
+    if (document.words.length > maxWords) { res.status(413).json({ error: `El archivo tiene más de ${maxWords} palabras.` }); return; }
     const words = validateWords(document.words, document.collections);
     if (!words) { res.status(400).json({ error: 'El archivo contiene palabras o relaciones inválidas.' }); return; }
 

@@ -47,7 +47,8 @@ async function createSession(): Promise<DemoSession> {
         }
       }
     });
-    return { db, api: createApp(db), lastUsed: Date.now(), activeRequests: 0 };
+    // PGlite comparte hilo con Node: una importación grande congelaría la demo para todos.
+    return { db, api: createApp(db, { importLimit: { bytes: '200kb', words: 200 } }), lastUsed: Date.now(), activeRequests: 0 };
   } catch (error) {
     await db.close();
     throw error;
@@ -87,8 +88,18 @@ export function createDemoApp(options: { maxSessions?: number } = {}) {
       return existing;
     }
     if (sessions.size + pendingSessions >= (options.maxSessions ?? maxSessions)) {
-      res.status(503).json({ error: 'La demo está ocupada. Vuelve a intentarlo más tarde.' });
-      return null;
+      let oldestId: string | null = null;
+      for (const [id, session] of sessions) {
+        if (!session.activeRequests && (oldestId === null || session.lastUsed < sessions.get(oldestId)!.lastUsed)) oldestId = id;
+      }
+      if (oldestId === null) {
+        res.status(503).json({ error: 'La demo está ocupada. Vuelve a intentarlo más tarde.' });
+        return null;
+      }
+      const evicted = sessions.get(oldestId)!;
+      sessions.delete(oldestId);
+      try { await evicted.db.close(); }
+      catch (error) { console.error('No se pudo cerrar una sesión sustituida de la demo:', error); }
     }
     pendingSessions += 1;
     let session: DemoSession;
@@ -105,6 +116,14 @@ export function createDemoApp(options: { maxSessions?: number } = {}) {
   }, 60_000);
   cleanup.unref();
 
+  app.use((_req, res, next) => {
+    res.set({
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'same-origin',
+      'Content-Security-Policy': "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none'",
+    });
+    next();
+  });
   app.get('/api/demo-info', (_req, res) => { res.json({ demo: true, temporary: true }); });
   app.use(async (req, res, next) => {
     if (!req.path.startsWith('/api/')) { next(); return; }
@@ -115,10 +134,8 @@ export function createDemoApp(options: { maxSessions?: number } = {}) {
     session.api(req, res);
   });
 
-  app.get(['/', '/estudio'], async (req, res) => {
-    const session = await sessionFor(req, res);
-    if (session) res.sendFile('index.html', { root: frontendDirectory });
-  });
+  // Sin sesión: bots, vistas previas de enlaces y health checks no ocupan plazas.
+  app.get(['/', '/estudio'], (_req, res) => { res.sendFile('index.html', { root: frontendDirectory }); });
   app.use(express.static(frontendDirectory));
   app.use((_req, res) => { res.status(404).end(); });
 
