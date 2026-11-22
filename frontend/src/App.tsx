@@ -18,7 +18,7 @@ const readView = (): AppView => window.location.pathname === '/estudio' ? 'study
 function readLanguagePreference(key: string, fallback: WordInput['targetLanguage']): WordInput['targetLanguage'] {
   try {
     const saved = localStorage.getItem(key);
-    if (saved && Object.hasOwn(languages, saved)) return saved as WordInput['targetLanguage'];
+    if (languages.includes(saved as WordInput['targetLanguage'])) return saved as WordInput['targetLanguage'];
   } catch {
     // Algunos navegadores bloquean el almacenamiento. La aplicación puede seguir usándose.
   }

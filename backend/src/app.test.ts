@@ -11,6 +11,13 @@ beforeAll(async () => { await initializeDatabase(db, false); }, 30000);
 afterAll(async () => { await db.close(); });
 
 describe('API y SQL del diccionario', () => {
+  it('valida collectionId igual que el resto de identificadores', async () => {
+    for (const id of ['0x10', '1e1', ' 5', '0']) {
+      await request(app).get('/api/words').query({ collectionId: id }).expect(400);
+      await request(app).post(`/api/words?collectionId=${encodeURIComponent(id)}`).send({ ...word, term: 'id raro' }).expect(400);
+    }
+  });
+
   it('solo responde a los hosts permitidos (DNS rebinding)', async () => {
     const local = createApp(db, { allowedHosts: ['localhost:3001', '127.0.0.1:3001'] });
     await request(local).get('/api/words').set('Host', 'localhost:3001').expect(200);

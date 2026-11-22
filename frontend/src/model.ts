@@ -1,16 +1,17 @@
 import type { UiText } from './interfaceText';
 
-export const languages = { es: 'Español', en: 'Inglés', fr: 'Francés', de: 'Alemán', it: 'Italiano', pt: 'Portugués', ja: 'Japonés' };
-export const wordTypes = { noun: 'Sustantivo', verb: 'Verbo', adjective: 'Adjetivo', adverb: 'Adverbio', expression: 'Expresión', other: 'Otro' };
+// Solo códigos: los nombres visibles salen de interfaceText en el idioma de la interfaz.
+export const languages = ['es', 'en', 'fr', 'de', 'it', 'pt', 'ja'] as const;
+export const wordTypes = ['noun', 'verb', 'adjective', 'adverb', 'expression', 'other'] as const;
 export interface Example { text: string; translation: string }
 export interface EnglishVerbForms { past?: string; pastParticiple?: string; ing?: string }
 
 export interface WordInput {
   term: string;
   translation: string;
-  sourceLanguage: keyof typeof languages;
-  targetLanguage: keyof typeof languages;
-  wordType: keyof typeof wordTypes;
+  sourceLanguage: typeof languages[number];
+  targetLanguage: typeof languages[number];
+  wordType: typeof wordTypes[number];
   englishVerbForms?: EnglishVerbForms;
   notes: string;
   examples: Example[];
