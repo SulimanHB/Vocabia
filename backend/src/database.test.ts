@@ -29,7 +29,7 @@ describe('Migración de ejemplos', () => {
       expect(after).toEqual({ ...before, examples, english_verb_forms: {}, study_mark: null });
       await initializeDatabase(db, false);
       expect((await db.query('SELECT * FROM words')).rows[0]).toEqual(after);
-      expect((await db.query('SELECT name FROM app_migrations ORDER BY name')).rows).toEqual([{ name: '002_example_translations' }, { name: '003_english_verb_forms' }, { name: '004_collections' }, { name: '005_study_rounds' }, { name: '006_merge_history' }, { name: '007_word_study_mark' }]);
+      expect((await db.query('SELECT name FROM app_migrations ORDER BY name')).rows).toEqual([{ name: '001_initial' }, { name: '002_example_translations' }, { name: '003_english_verb_forms' }, { name: '004_collections' }, { name: '005_study_rounds' }, { name: '006_merge_history' }, { name: '007_word_study_mark' }]);
     } finally { await db.close(); }
   });
 
@@ -40,7 +40,7 @@ describe('Migración de ejemplos', () => {
       const before = (await db.query('SELECT * FROM words')).rows;
       await expect(initializeDatabase(db, false)).rejects.toThrow();
       expect((await db.query('SELECT * FROM words')).rows).toEqual(before);
-      expect((await db.query('SELECT * FROM app_migrations')).rows).toEqual([]);
+      expect((await db.query('SELECT name FROM app_migrations')).rows).toEqual([{ name: '001_initial' }]);
     } finally { await db.close(); }
   });
 });
