@@ -520,7 +520,7 @@ describe('Colección de palabras', () => {
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
     await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
     expect(window.location.pathname).toBe('/estudio');
-    await user.click(await screen.findByRole('button', { name: 'Practicar' }));
+    await user.click(await screen.findByRole('button', { name: 'Practicar (2)' }));
     const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
     expect(exercise.getByRole('heading', { name: 'dormir' })).toBeVisible();
     expect(exercise.queryByText('sleep')).not.toBeInTheDocument();
@@ -583,6 +583,7 @@ describe('Colección de palabras', () => {
     await user.click(await within(screen.getByRole('group', { name: 'Colecciones' })).findByRole('button', { name: 'A1 2' }));
     await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
     const difficultButton = await screen.findByRole('button', { name: 'Practicar las difíciles (1)' });
+    expect(difficultButton).toHaveAccessibleDescription('Repasa las palabras que marcaste con «Me costó».');
     await user.click(difficultButton);
     const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
     expect(exercise.getByRole('heading', { name: 'dormir' })).toBeVisible();
@@ -592,7 +593,9 @@ describe('Colección de palabras', () => {
     await waitFor(() => expect(words[0].studyMark).toBe('known'));
     await user.click(exercise.getByRole('button', { name: 'Ver resumen' }));
     await user.click(exercise.getByRole('button', { name: 'Nueva ronda' }));
-    expect(await screen.findByRole('button', { name: 'Practicar las difíciles (0)' })).toBeDisabled();
+    const noDifficult = await screen.findByRole('button', { name: 'Practicar las difíciles (0)' });
+    expect(noDifficult).toBeDisabled();
+    expect(noDifficult).toHaveAccessibleDescription('Aún no hay ninguna: marca «Me costó» en una ronda para repasarlas aquí.');
     expect(screen.getByRole('heading', { name: 'Palabras disponibles: 2' })).toBeVisible();
   });
 

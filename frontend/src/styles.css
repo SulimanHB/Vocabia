@@ -712,20 +712,16 @@ body {
   padding-bottom: 96px;
 }
 .language-button {
-  position: fixed;
-  bottom: calc(24px + env(safe-area-inset-bottom,0px));
-  right: calc(24px + env(safe-area-inset-right,0px));
-  z-index: 20;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 11px 17px;
+  gap: 9px;
+  min-height: 44px;
+  padding: 8px 15px;
   background: #fffefb;
   color: #345243;
   border: 1px solid #d8e0d0;
   border-radius: 30px;
-  box-shadow: 0 4px 20px #20362b20;
   font-size: 13px;
   font-weight: 600;
 }
@@ -763,11 +759,8 @@ body {
     gap: 10px;
   }
   .language-button {
-    bottom: calc(16px + env(safe-area-inset-bottom,0px));
-    right: calc(16px + env(safe-area-inset-right,0px));
-    width: 52px;
-    height: 52px;
-    min-height: 52px;
+    width: 44px;
+    height: 44px;
     justify-content: center;
     padding: 0;
     border-radius: 50%;
@@ -2133,8 +2126,33 @@ button:focus-visible {
   font-size: 21px;
 }
 .study-page-content .practice-toggle {
-  justify-content: flex-start;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
   margin: 20px 0;
+}
+.practice-toggle .primary {
+  min-height: 44px;
+}
+.practice-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
+  gap: 14px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.practice-options li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+.practice-options p {
+  color: #627567;
+  font-size: 12px;
+  line-height: 1.45;
 }
 .study-page-content .study-history {
   margin-top: 24px;
@@ -2177,7 +2195,7 @@ button:focus-visible {
     font-size: 13px;
   }
   .study-page-content .practice-toggle {
-    flex-direction: column;
+    align-items: stretch;
   }
   .study-page-content .practice-toggle button {
     width: 100%;
@@ -2361,4 +2379,13 @@ button:focus-visible {
   background: #fff6df;
   color: #554121;
   font-size: 0.875rem;
+}
+@media(max-width:360px) {
+  /* Sin el nombre, la cabecera cabe con el botón de idioma; el enlace mantiene su aria-label. */
+  .brand {
+    font-size: 0;
+  }
+  .brand-mark {
+    margin-right: 0;
+  }
 }
