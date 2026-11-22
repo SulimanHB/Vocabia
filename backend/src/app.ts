@@ -9,9 +9,16 @@ import { createMergeRouter } from './mergeWords.js';
 
 const columns = `id, term, translation, source_language AS "sourceLanguage", target_language AS "targetLanguage", word_type AS "wordType", notes, examples, english_verb_forms AS "englishVerbForms", study_mark AS "studyMark"`;
 
-export function createApp(db: Database, { importLimit = { bytes: '3mb', words: 5000 } } = {}) {
+export function createApp(db: Database, { importLimit = { bytes: '3mb', words: 5000 }, allowedHosts }: {
+  importLimit?: { bytes: string; words: number }; allowedHosts?: string[];
+} = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // DNS rebinding: una web con un dominio que resuelve a 127.0.0.1 llega con su propio Host.
+  if (allowedHosts) app.use((req, res, next) => {
+    if (allowedHosts.includes(req.headers.host ?? '')) { next(); return; }
+    res.status(403).json({ error: 'Host no permitido.' });
+  });
   // CSRF: un formulario o fetch "simple" de otra web no puede enviar application/json sin preflight CORS.
   app.use((req, res, next) => {
     const type = req.headers['content-type']?.split(';')[0].trim().toLowerCase();

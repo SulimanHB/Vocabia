@@ -5,7 +5,7 @@ const db = openDatabase();
 try {
   await initializeDatabase(db);
   const port = Number(process.env.PORT ?? 3001);
-  const server = createApp(db).listen(port, '127.0.0.1', () => {
+  const server = createApp(db, { allowedHosts: [`localhost:${port}`, `127.0.0.1:${port}`] }).listen(port, '127.0.0.1', () => {
     console.log(`API disponible en http://localhost:${port} (${process.env.DATABASE_URL ? 'PostgreSQL' : 'PGlite local'})`);
   });
   const shutdown = () => server.close(() => { void db.close().then(() => process.exit(0)); });

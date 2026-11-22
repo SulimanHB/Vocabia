@@ -11,6 +11,14 @@ beforeAll(async () => { await initializeDatabase(db, false); }, 30000);
 afterAll(async () => { await db.close(); });
 
 describe('API y SQL del diccionario', () => {
+  it('solo responde a los hosts permitidos (DNS rebinding)', async () => {
+    const local = createApp(db, { allowedHosts: ['localhost:3001', '127.0.0.1:3001'] });
+    await request(local).get('/api/words').set('Host', 'localhost:3001').expect(200);
+    await request(local).get('/api/words').set('Host', '127.0.0.1:3001').expect(200);
+    await request(local).get('/api/words').set('Host', 'evil.example:3001').expect(403);
+    await request(local).get('/api/words').set('Host', 'localhost:3002').expect(403);
+  });
+
   it('rechaza escrituras que no son JSON para que otra web no pueda lanzarlas (CSRF)', async () => {
     const created = await request(app).post('/api/words').send({ ...word, term: 'csrf' }).expect(201);
     try {
