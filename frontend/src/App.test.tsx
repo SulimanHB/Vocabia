@@ -577,6 +577,32 @@ describe('Colección de palabras', () => {
     expect(screen.getByRole('heading', { name: 'Palabras disponibles: 1' })).toBeVisible();
   });
 
+  it('resume las marcas de la ronda y ofrece repasar las difíciles desde el resumen', async () => {
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', studyMark: null },
+      { ...words[0], id: 2, term: 'beber', translation: 'drink', studyMark: null },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'dormir' });
+    await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
+    await user.click(await screen.findByRole('button', { name: 'Practicar (2)' }));
+    const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
+    while (exercise.queryByRole('button', { name: 'Mostrar respuesta' })) {
+      const term = exercise.getByRole('heading', { level: 3 }).textContent;
+      await user.click(exercise.getByRole('button', { name: 'Mostrar respuesta' }));
+      if (term === 'dormir' || term === 'beber') await user.click(exercise.getByRole('button', { name: term === 'dormir' ? 'Me costó' : 'La sabía' }));
+      await user.click(exercise.getByRole('button', { name: /Siguiente pregunta|Ver resumen/ }));
+    }
+    const summary = exercise.getByRole('heading', { name: 'Resumen de la ronda' }).closest('section')!;
+    expect(within(summary).getByText('Me costó').nextSibling).toHaveTextContent('1');
+    expect(within(summary).getByText('La sabía').nextSibling).toHaveTextContent('1');
+    await user.click(within(summary).getByRole('button', { name: 'Practicar las difíciles (1)' }));
+    const difficult = within(screen.getByRole('region', { name: 'Practicar' }));
+    expect(difficult.getByRole('heading', { name: 'dormir' })).toBeVisible();
+    expect(difficult.getByText(/^1 de \d+$/)).toBeVisible();
+  });
+
   it('repasa solo las difíciles de la colección seleccionada y sale al resolver la última', async () => {
     collections = [
       { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 2 },

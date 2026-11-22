@@ -72,8 +72,9 @@ export function StudyPage({ referenceLanguage, studyLanguage, selectedCollection
         </div>
         {practice === 'listening' && <ListeningExercise words={words} language={referenceLanguage} studyLanguage={studyLanguage} />}
         {practice === 'speaking' && <SpeakingExercise words={words} language={referenceLanguage} studyLanguage={studyLanguage} />}
-        {(practice === 'regular' || practice === 'difficult') && <StudyMode words={practice === 'difficult' ? difficultWords : words}
-          language={referenceLanguage} studyLanguage={studyLanguage} difficultOnly={practice === 'difficult'} onMark={onMark} onNoWords={() => setPractice(null)} />}
+        {(practice === 'regular' || practice === 'difficult') && <StudyMode key={practice} words={practice === 'difficult' ? difficultWords : words}
+          language={referenceLanguage} studyLanguage={studyLanguage} difficultOnly={practice === 'difficult'} onMark={onMark} onNoWords={() => setPractice(null)}
+          onPracticeDifficult={() => setPractice('difficult')} />}
       </>}
       {practice === null && <StudyHistory sourceLanguage={referenceLanguage} targetLanguage={studyLanguage} revision={revision} />}
     </section>
