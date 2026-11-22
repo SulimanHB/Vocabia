@@ -1,4 +1,5 @@
-import { languages, wordTypes, type Word, type WordInput } from './model';
+import type { Word, WordInput } from './model';
+import { interfaceText } from './interfaceText';
 import { verbFormsText } from './verbFormsText';
 import { collectionsText } from './collectionsText';
 import { WordAudioButton } from './WordAudioButton';
@@ -18,6 +19,7 @@ interface Props {
 export function WordCard({ word, anchorId, interfaceLanguage, inCollection, removing, onRemoveFromCollection, onEdit, onDelete }: Props) {
   const verbCopy = verbFormsText[interfaceLanguage];
   const groupCopy = collectionsText[interfaceLanguage];
+  const ui = interfaceText[interfaceLanguage];
   const isEnglishVerb = word.wordType === 'verb' && word.targetLanguage === 'en';
   const base = isEnglishVerb ? englishBase(word.translation) : null;
   const future = isEnglishVerb ? englishFuture(word.translation) : null;
@@ -30,9 +32,9 @@ export function WordCard({ word, anchorId, interfaceLanguage, inCollection, remo
 
   return <article className={`word-card card-${word.wordType}`} id={anchorId} tabIndex={anchorId ? -1 : undefined} lang={interfaceLanguage}>
     <div className="card-top">
-      <span className={`type-tag type-${word.wordType}`} lang="es">{wordTypes[word.wordType]}</span>
-      <span className="language-pair" lang="es">
-        {languages[word.sourceLanguage]} <span aria-hidden="true">→</span><span className="sr-only">a</span> {languages[word.targetLanguage]}
+      <span className="type-tag">{ui.wordTypes[word.wordType]}</span>
+      <span className="language-pair">
+        {ui.languages[word.sourceLanguage]} <span aria-hidden="true">→</span><span className="sr-only">{ui.pairTo}</span> {ui.languages[word.targetLanguage]}
       </span>
     </div>
 
@@ -66,11 +68,11 @@ export function WordCard({ word, anchorId, interfaceLanguage, inCollection, remo
     <div className="card-actions">
       {inCollection && <button type="button" disabled={removing} onClick={() => onRemoveFromCollection(word.id)}
         aria-label={`${groupCopy.remove}: ${word.term}`}>{groupCopy.remove}</button>}
-      <button type="button" lang="es" onClick={() => onEdit(word)} aria-label={`Editar ${word.term}`}>
-        <span aria-hidden="true">✎</span> Editar
+      <button type="button" onClick={() => onEdit(word)} aria-label={`${ui.edit} ${word.term}`}>
+        <span aria-hidden="true">✎</span> {ui.edit}
       </button>
-      <button type="button" lang="es" className="delete" onClick={() => onDelete(word)} aria-label={`Borrar ${word.term}`}>
-        <span aria-hidden="true">×</span> Borrar
+      <button type="button" className="delete" onClick={() => onDelete(word)} aria-label={`${ui.delete} ${word.term}`}>
+        <span aria-hidden="true">×</span> {ui.delete}
       </button>
     </div>
   </article>;

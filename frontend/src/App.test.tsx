@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import { interfaceText } from './interfaceText';
 import type { Collection, Word } from './model';
 import { downloadExport } from './exportWords';
 import { createExportDocument } from './exportWords';
@@ -755,7 +756,7 @@ describe('Colección de palabras', () => {
     ['it', 'La mia raccolta', 'Aggiungi parola', 'Lingua della parola *', 'Salva parola', 'Annulla'],
     ['pt', 'A minha coleção', 'Adicionar palavra', 'Idioma da palavra *', 'Guardar palavra', 'Cancelar'],
     ['ja', 'マイコレクション', '単語を追加', '単語の言語 *', '単語を保存', 'キャンセル'],
-  ])('traduce colección y formulario en %s y conserva las tarjetas', async (code, heading, add, source, save, cancel) => {
+  ])('traduce colección, formulario y tarjetas en %s', async (code, heading, add, source, save, cancel) => {
     localStorage.setItem('vocabia.referenceLanguage', code);
     words[0].sourceLanguage = code as Word['sourceLanguage'];
     words[0].targetLanguage = code === 'en' ? 'es' : 'en';
@@ -767,7 +768,7 @@ describe('Colección de palabras', () => {
     const card = screen.getByRole('article');
     expect(card).toHaveTextContent('libro');
     expect(card).toHaveTextContent('A book.');
-    expect(card).toHaveTextContent('Sustantivo');
+    expect(card).toHaveTextContent(interfaceText[code as Word['sourceLanguage']].wordTypes.noun);
     const originalCard = card.outerHTML;
     await user.click(screen.getByRole('button', { name: add }));
     expect(screen.getByLabelText(source)).toBeVisible();
@@ -776,7 +777,7 @@ describe('Colección de palabras', () => {
     expect(screen.getByRole('article').outerHTML).toBe(originalCard);
   });
 
-  it('traduce filtros, contadores y avisos al cambiar a alemán sin cambiar las tarjetas', async () => {
+  it('traduce filtros, contadores y avisos al cambiar a alemán, también en las tarjetas', async () => {
     words.push({ ...words[0], id: 3, sourceLanguage: 'de' });
     const user = userEvent.setup();
     render(<App />);
@@ -790,8 +791,8 @@ describe('Colección de palabras', () => {
     expect(await screen.findByText('1 Wort gefunden')).toBeVisible();
     expect(screen.getByText('Referenzsprache: Deutsch. Sie wird für neue Übersetzungen verwendet.')).toBeVisible();
     expect(screen.getByRole('article')).toHaveTextContent('A book.');
-    expect(screen.getByRole('article')).toHaveTextContent('Alemán');
-    await user.click(screen.getByRole('button', { name: 'Borrar book' }));
+    expect(screen.getByRole('article')).toHaveTextContent('Deutsch');
+    await user.click(screen.getByRole('button', { name: 'Löschen book' }));
     expect(screen.getByRole('heading', { name: 'Dieses Wort löschen?' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Behalten' }));
     await user.type(screen.getByRole('searchbox'), 'missing');
@@ -838,7 +839,7 @@ describe('Colección de palabras', () => {
     expect(screen.getByLabelText('Langue du mot *')).toHaveValue('fr');
     expect(screen.getByLabelText('Langue de la traduction *')).toHaveValue('en');
     await user.click(screen.getByRole('button', { name: 'Annuler' }));
-    await user.click(await screen.findByRole('button', { name: 'Editar book' }));
+    await user.click(await screen.findByRole('button', { name: 'Modifier book' }));
     expect(screen.getByLabelText('Langue de la traduction *')).toHaveValue('en');
   });
 
