@@ -146,6 +146,7 @@ GitHub Actions ejecuta estas mismas comprobaciones (y la compilación de la demo
 ## Estado y límites
 
 - La demo pública está en [vocabia-eta.vercel.app](https://vocabia-eta.vercel.app). La primera visita descarga unos 4 MB comprimidos; en móviles antiguos puede tardar más en arrancar.
+- La demo publicada cuenta visitas con Vercel Web Analytics, que no usa cookies; en local no se carga.
 - No hay cuentas ni sincronización entre dispositivos. La demo se reinicia y el modo de desarrollo guarda los datos en el equipo.
 - La voz depende de las funciones y voces disponibles en cada navegador; el reconocimiento de pronunciación puede fallar incluso cuando la palabra se diga bien, y algunas voces ignoran la velocidad lenta.
 - El tema oscuro usa la función CSS `light-dark()`, disponible desde 2024 en Chrome, Edge, Firefox y Safari.
