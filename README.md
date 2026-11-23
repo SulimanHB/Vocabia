@@ -2,7 +2,7 @@
 
 **Un diccionario personal para guardar palabras y practicar idiomas.** Organiza vocabulario por pareja de idiomas y colecciones, añade contexto a cada tarjeta y repásalo con ejercicios escritos, de escucha y de pronunciación.
 
-> **Estado:** beta funcional en local. La demo para visitantes está preparada, pero todavía no tiene una URL pública. El tutor con IA y la creación de tarjetas por voz quedan para una etapa futura.
+> **Estado:** beta funcional. La demo funciona entera en el navegador del visitante y está lista para publicarse gratis como sitio estático (por ejemplo, en Vercel). El tutor con IA y la creación de tarjetas por voz quedan para una etapa futura.
 
 ## Índice
 
@@ -79,9 +79,11 @@ npm run start:demo
 
 Abre [http://localhost:3001](http://localhost:3001). La demo incluye **60 tarjetas ficticias y 120 frases de ejemplo**: 20 tarjetas de español a inglés, las mismas 20 de inglés a español (para quien use la interfaz en inglés) y cuatro de español a cada uno de los otros cinco idiomas de estudio. También trae las colecciones **A1**, **A2** y **Viajes**.
 
-Cada navegador recibe una base temporal propia. Los cambios desaparecen tras 30 minutos sin actividad o al reiniciar el servidor. **Usa solo datos de prueba**: esta demo no tiene cuentas ni almacenamiento permanente.
+La demo **no necesita servidor**: la misma API de la aplicación se ejecuta en tu navegador contra una base PGlite propia, en memoria. Nadie más ve tus cambios y desaparecen al recargar la página. **Usa solo datos de prueba**: esta demo no tiene cuentas ni almacenamiento permanente. La primera visita descarga unos megas (la base de datos en WebAssembly); después quedan en la caché del navegador.
 
-La demo pública está protegida para un servidor compartido: el número de sesiones es limitado (variable `DEMO_MAX_SESSIONS`, 12 por defecto) y, al llegar al máximo, se recicla la sesión inactiva más antigua; las importaciones tienen un tamaño máximo menor que en local, y el servidor envía cabeceras de seguridad (Content-Security-Policy, `nosniff`, `Referrer-Policy`).
+### Publicar la demo
+
+Como es un sitio estático, se puede alojar gratis y no se satura aunque entren muchas personas a la vez: cada visitante usa la memoria de su propio navegador. El archivo [vercel.json](vercel.json) ya define la compilación (`npm run build:demo`), la carpeta publicada (`frontend/dist`) y las cabeceras de seguridad (Content-Security-Policy, `nosniff`, `Referrer-Policy`). En Vercel basta con importar el repositorio. Las importaciones tienen en la demo un tamaño máximo menor que en local para no bloquear el navegador.
 
 ## Instalar para desarrollar
 
@@ -114,6 +116,8 @@ La **API** es la parte del servidor que recibe peticiones del navegador: por eje
 | Vitest, Testing Library y Supertest | Probar lógica, interfaz y rutas de la API. | Comprueban comportamientos reales, como crear una tarjeta o mostrar el resultado de un ejercicio. |
 | ESLint y Git | Revisar el código y registrar sus cambios. | Ayudan a mantener el proyecto y a explicar su evolución en el repositorio. |
 
+La lógica de la API (validación con Zod y consultas SQL) está escrita una sola vez como una lista de rutas sin dependencias de Express: el servidor local la monta en Express y la demo la ejecuta en el navegador.
+
 La estructura principal es `frontend/` para la interfaz, `backend/` para la API y los datos, y `docs/` para las capturas y el historial. Las decisiones y etapas anteriores están en la [guía de desarrollo](docs/historial-desarrollo.md).
 
 ## Seguridad
@@ -135,7 +139,7 @@ npm run build
 
 ## Estado y límites
 
-- La demo todavía no está publicada en una URL; por ahora se ejecuta en local.
+- La demo está preparada para Vercel, pero la URL pública depende de publicarla desde una cuenta de Vercel.
 - No hay cuentas ni sincronización entre dispositivos. La demo se reinicia y el modo de desarrollo guarda los datos en el equipo.
 - La voz depende de las funciones y voces disponibles en cada navegador; el reconocimiento de pronunciación puede fallar incluso cuando la palabra se diga bien, y algunas voces ignoran la velocidad lenta.
 - El tema oscuro usa la función CSS `light-dark()`, disponible desde 2024 en Chrome, Edge, Firefox y Safari.

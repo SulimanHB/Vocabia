@@ -21,9 +21,9 @@ Abre `http://localhost:5173`. Se inicia sin cuenta ni servidor PostgreSQL instal
 
 ### Demo aislada para probar antes de publicar
 
-La demo usa la misma API y las mismas funciones que la aplicación local. Cada navegador recibe una base PGlite temporal con seis palabras ficticias en Español → Inglés y una colección A1. Las palabras, colecciones y ejercicios que añadas no aparecen a otros visitantes. Se eliminan tras 30 minutos sin actividad o al reiniciar el servidor; no introduzcas información personal. La demo admite hasta 12 sesiones activas a la vez y responde con un aviso de ocupación si llega al límite.
+La demo usa la misma API y las mismas funciones que la aplicación local, pero sin servidor: las rutas de la API se ejecutan en el navegador contra una base PGlite en memoria con 60 palabras ficticias. Las palabras, colecciones y ejercicios que añadas no salen del navegador y se pierden al recargar; no introduzcas información personal.
 
-Una cookie guarda un identificador aleatorio de sesión, no el vocabulario. El servidor lo usa para encontrar la base temporal de ese visitante. La cookie es `HttpOnly` y `SameSite=Lax`; cuando la petición llega por HTTPS se marca también como `Secure`. Al agotarse la sesión se crea otra con los datos ficticios iniciales.
+Una versión anterior usaba un servidor con una base PGlite por visitante. Cada base ocupaba unos 200 MB, así que en un alojamiento gratuito de 512 MB solo cabía una persona a la vez. Ejecutarla en el navegador elimina ese límite y el coste del servidor.
 
 Para probarla en tu equipo:
 
@@ -439,12 +439,12 @@ Con la imagen `postgres:15-alpine` en un contenedor temporal, `npm run build` te
 
 Se revisó el proyecto con varias auditorías (seguridad, accesibilidad y diseño, y sobreingeniería) y se aplicaron las mejoras por fases, cada una en su commit:
 
-- **Demo pública:** sesiones que no se agotan con visitas sin uso, límite de importación propio, cabeceras de seguridad y health check que no crea sesiones. Se preparó `render.yaml`, pero no se ha desplegado: cada sesión usa una base PGlite de unos 200 MB, por lo que el plan gratuito de 512 MB solo admite una sesión.
+- **Demo pública:** sesiones que no se agotan con visitas sin uso, límite de importación propio, cabeceras de seguridad y health check que no crea sesiones. Después, la demo pasó a ejecutarse en el navegador (sitio estático, `vercel.json`): la lógica de la API se separó de Express en una lista de rutas común al servidor y al navegador.
 - **Seguridad de la app local:** las escrituras exigen JSON (CSRF), la API solo responde a `localhost` (DNS rebinding) y los identificadores se validan igual en todas las rutas.
 - **Datos:** la exportación grande se puede volver a importar, la vista previa detecta colecciones repetidas con acentos codificados de forma distinta, y las migraciones se aplican en un bucle con una transacción por archivo.
 - **Interfaz:** tarjetas en el idioma de la interfaz, opciones de Estudio más claras, resumen de ronda con acceso a las palabras difíciles, botón de idioma en la cabecera, contraste y zonas táctiles corregidos, tema oscuro con interruptor y botón para escuchar despacio.
 
-`npm test` pasó 53 pruebas del backend y 96 del frontend; `lint`, `typecheck`, `build` y `npm run test:postgres` terminaron correctamente y `npm audit` no encontró vulnerabilidades. La interfaz se comprobó en Chromium a 320, 375, 390 y 1440 px.
+`npm test` pasó 49 pruebas del backend y 97 del frontend; `lint`, `typecheck`, `build` y `npm run test:postgres` terminaron correctamente y `npm audit` no encontró vulnerabilidades. La interfaz se comprobó en Chromium a 320, 375, 390 y 1440 px.
 
 ## API
 

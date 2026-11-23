@@ -49,7 +49,9 @@ export function getErrorMessage(error: unknown, text: UiText): string {
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } });
+    const init = { ...options, headers: { 'Content-Type': 'application/json', ...options?.headers } };
+    // La demo pública no tiene servidor: la API se ejecuta en el navegador (se carga solo en ese modo).
+    response = import.meta.env.MODE === 'demo' ? await (await import('./demoApi')).demoFetch(path, init) : await fetch(`/api${path}`, init);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new ApiError('connectionError');

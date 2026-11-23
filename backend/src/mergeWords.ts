@@ -1,6 +1,6 @@
-import { Router } from 'express';
 import { z } from 'zod';
-import type { Database, Queryable } from './database.js';
+import type { Database, Queryable } from './db.js';
+import { reply, type ApiRoute } from './http.js';
 import { pairSchema, validId, wordSchema } from './validation.js';
 
 const requestSchema = z.object({
@@ -44,20 +44,19 @@ class MergeFailure extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
-export function createMergeRouter(db: Database) {
-  const router = Router();
-  router.get('/latest', async (req, res) => {
+export const mergeRoutes = (db: Database): ApiRoute[] => [
+  { method: 'GET', path: '/api/words/merge/latest', handle: async req => {
     const parsed = pairSchema.safeParse(req.query);
-    if (!parsed.success) { res.status(400).json({ error: 'Indica una pareja de idiomas válida.' }); return; }
+    if (!parsed.success) return reply(400, { error: 'Indica una pareja de idiomas válida.' });
     const result = await db.query<{ id: number; term: string; translation: string }>(`
       SELECT id,keep_after->'word'->>'term' AS term,keep_after->'word'->>'translation' AS translation
       FROM merge_history WHERE source_language=$1 AND target_language=$2 AND undone_at IS NULL
       ORDER BY id DESC LIMIT 1`, [parsed.data.sourceLanguage, parsed.data.targetLanguage]);
-    res.json(result.rows[0] ?? null);
-  });
+    return reply(200, result.rows[0] ?? null);
+  } },
 
-  router.post('/:id/undo', async (req, res) => {
-    if (!validId(req.params.id)) { res.status(400).json({ error: 'El identificador no es válido.' }); return; }
+  { method: 'POST', path: '/api/words/merge/:id/undo', handle: async req => {
+    if (!validId(req.params.id)) return reply(400, { error: 'El identificador no es válido.' });
     const id = Number(req.params.id);
     try {
       const restored = await db.transaction(async tx => {
@@ -100,16 +99,16 @@ export function createMergeRouter(db: Database) {
         await tx.query('UPDATE merge_history SET undone_at=NOW() WHERE id=$1', [id]);
         return { restored: true };
       });
-      res.json(restored);
+      return reply(200, restored);
     } catch (error) {
-      if (error instanceof MergeFailure) { res.status(error.status).json({ error: error.message }); return; }
+      if (error instanceof MergeFailure) return reply(error.status, { error: error.message });
       throw error;
     }
-  });
+  } },
 
-  router.post('/', async (req, res) => {
+  { method: 'POST', path: '/api/words/merge', handle: async req => {
     const parsed = requestSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: 'Revisa las tarjetas y el contenido de la fusión.' }); return; }
+    if (!parsed.success) return reply(400, { error: 'Revisa las tarjetas y el contenido de la fusión.' });
     const { keepId, sourceId, deleteSource, word } = parsed.data;
     try {
       const result = await db.transaction(async tx => {
@@ -149,11 +148,10 @@ export function createMergeRouter(db: Database) {
           FROM words WHERE id=$1`, [keepId]);
         return merged.rows[0];
       });
-      res.json(result);
+      return reply(200, result);
     } catch (error) {
-      if (error instanceof MergeFailure) { res.status(error.status).json({ error: error.message }); return; }
+      if (error instanceof MergeFailure) return reply(error.status, { error: error.message });
       throw error;
     }
-  });
-  return router;
-}
+  } },
+];
