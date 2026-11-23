@@ -30,5 +30,10 @@ describe('vista previa del archivo exportado', () => {
     failsWith({ ...exported(), words: [{ ...exported().words[0], collections: ['No existe'] }] }, 'invalidData');
     failsWith({ ...exported(), words: [{ ...exported().words[0], targetLanguage: 'de' }] }, 'invalidData');
     failsWith({ ...exported(), collections: [exported().collections[0], { ...exported().collections[0], name: 'a1' }] }, 'invalidData');
+    // Igual que el backend: «Viajés» en NFC y en NFD es la misma colección.
+    const nfc = { ...exported().collections[0], name: 'Viaj\u00e9s' };
+    const words = [{ ...exported().words[0], collections: [nfc.name] }];
+    expect(parse({ ...exported(), collections: [nfc], words }).collections).toHaveLength(1);
+    failsWith({ ...exported(), collections: [nfc, { ...nfc, name: 'Viaje\u0301s' }], words }, 'invalidData');
   });
 });

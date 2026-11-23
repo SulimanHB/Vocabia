@@ -11,6 +11,31 @@ beforeAll(async () => { await initializeDatabase(db, false); }, 30000);
 afterAll(async () => { await db.close(); });
 
 describe('API y SQL del diccionario', () => {
+  it('valida collectionId igual que el resto de identificadores', async () => {
+    for (const id of ['0x10', '1e1', ' 5', '0']) {
+      await request(app).get('/api/words').query({ collectionId: id }).expect(400);
+      await request(app).post(`/api/words?collectionId=${encodeURIComponent(id)}`).send({ ...word, term: 'id raro' }).expect(400);
+    }
+  });
+
+  it('solo responde a los hosts permitidos (DNS rebinding)', async () => {
+    const local = createApp(db, { allowedHosts: ['localhost:3001', '127.0.0.1:3001'] });
+    await request(local).get('/api/words').set('Host', 'localhost:3001').expect(200);
+    await request(local).get('/api/words').set('Host', '127.0.0.1:3001').expect(200);
+    await request(local).get('/api/words').set('Host', 'evil.example:3001').expect(403);
+    await request(local).get('/api/words').set('Host', 'localhost:3002').expect(403);
+  });
+
+  it('rechaza escrituras que no son JSON para que otra web no pueda lanzarlas (CSRF)', async () => {
+    const created = await request(app).post('/api/words').send({ ...word, term: 'csrf' }).expect(201);
+    try {
+      await request(app).delete(`/api/words/${created.body.id}`).set('Content-Type', 'text/plain').expect(415);
+      await request(app).delete(`/api/words/${created.body.id}`).expect(415);
+      await request(app).post('/api/words').set('Content-Type', 'text/plain').send(JSON.stringify({ ...word, term: 'csrf 2' })).expect(415);
+      await request(app).get('/api/words').expect(200);
+    } finally { await request(app).delete(`/api/words/${created.body.id}`).set('Content-Type', 'application/json; charset=utf-8').expect(204); }
+  });
+
   it('guarda la valoración por palabra, la conserva al editar y rechaza marcas inválidas', async () => {
     const created = await request(app).post('/api/words').send({ ...word, term: 'marca de estudio' }).expect(201);
     const id = created.body.id;
@@ -25,7 +50,7 @@ describe('API y SQL del diccionario', () => {
       await request(app).put(`/api/words/${id}/study-mark`).send({ mark: 'known' }).expect(200);
       const afterMark = (await request(app).get('/api/words').expect(200)).body.find((item: { id: number }) => item.id === id);
       expect(afterMark.studyMark).toBe('known');
-    } finally { await request(app).delete(`/api/words/${id}`).expect(204); }
+    } finally { await request(app).delete(`/api/words/${id}`).set('Content-Type', 'application/json').expect(204); }
     await request(app).put(`/api/words/${id}/study-mark`).send({ mark: 'difficult' }).expect(404);
   });
   it('importa una palabra coincidente en A2 sin alterar la tarjeta de A1', async () => {
@@ -54,9 +79,9 @@ describe('API y SQL del diccionario', () => {
       expect(entries.find((entry: { id: number }) => entry.id !== original.body.id).collectionIds).toEqual([a2.id]);
     } finally {
       const entries = (await request(app).get('/api/words').expect(200)).body.filter((entry: { term: string }) => entry.term === 'dormir coincidencias');
-      for (const entry of entries) await request(app).delete(`/api/words/${entry.id}`).expect(204);
+      for (const entry of entries) await request(app).delete(`/api/words/${entry.id}`).set('Content-Type', 'application/json').expect(204);
       const groups = (await request(app).get('/api/collections').expect(200)).body.filter((group: { name: string }) => group.name.endsWith(' coincidencias'));
-      for (const group of groups) await request(app).delete(`/api/collections/${group.id}`).expect(204);
+      for (const group of groups) await request(app).delete(`/api/collections/${group.id}`).set('Content-Type', 'application/json').expect(204);
     }
   });
 
@@ -91,9 +116,9 @@ describe('API y SQL del diccionario', () => {
       expect(groups.find((group: { name: string }) => group.name === 'Importantes importación').wordCount).toBe(2);
     } finally {
       const entries = (await request(app).get('/api/words').expect(200)).body.filter((entry: { term: string }) => entry.term.startsWith('importar '));
-      for (const entry of entries) await request(app).delete(`/api/words/${entry.id}`).expect(204);
+      for (const entry of entries) await request(app).delete(`/api/words/${entry.id}`).set('Content-Type', 'application/json').expect(204);
       const groups = (await request(app).get('/api/collections').expect(200)).body.filter((group: { name: string }) => group.name.endsWith(' importación'));
-      for (const group of groups) await request(app).delete(`/api/collections/${group.id}`).expect(204);
+      for (const group of groups) await request(app).delete(`/api/collections/${group.id}`).set('Content-Type', 'application/json').expect(204);
     }
   });
 
@@ -146,8 +171,8 @@ describe('API y SQL del diccionario', () => {
       const all = await request(app).get('/api/words').expect(200);
       expect(all.body.filter((item: { term: string }) => ['no guardar', 'tampoco guardar', 'inválida'].includes(item.term))).toHaveLength(0);
     } finally {
-      await request(app).delete(`/api/words/${created.body.id}`).expect(204);
-      await request(app).delete(`/api/collections/${collection.body.id}`).expect(204);
+      await request(app).delete(`/api/words/${created.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).delete(`/api/collections/${collection.body.id}`).set('Content-Type', 'application/json').expect(204);
     }
   });
 
@@ -160,27 +185,27 @@ describe('API y SQL del diccionario', () => {
     try {
       expect(first.body.name).toBe('A1');
       await request(app).post('/api/collections').send({ name: 'a1', sourceLanguage: 'es', targetLanguage: 'en' }).expect(409);
-      await request(app).post(`/api/collections/${first.body.id}/words/${verb.body.id}`).expect(204);
-      await request(app).post(`/api/collections/${first.body.id}/words/${verb.body.id}`).expect(204);
-      await request(app).post(`/api/collections/${first.body.id}/words/${adjective.body.id}`).expect(204);
-      await request(app).post(`/api/collections/${important.body.id}/words/${verb.body.id}`).expect(204);
-      await request(app).post(`/api/collections/${german.body.id}/words/${verb.body.id}`).expect(400);
+      await request(app).post(`/api/collections/${first.body.id}/words/${verb.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).post(`/api/collections/${first.body.id}/words/${verb.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).post(`/api/collections/${first.body.id}/words/${adjective.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).post(`/api/collections/${important.body.id}/words/${verb.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).post(`/api/collections/${german.body.id}/words/${verb.body.id}`).set('Content-Type', 'application/json').expect(400);
       const listed = await request(app).get('/api/collections').query({ sourceLanguage: 'es', targetLanguage: 'en' }).expect(200);
       expect(listed.body.map((item: { name: string }) => item.name)).toEqual(['A1', 'Importantes']);
       expect(listed.body.find((item: { name: string }) => item.name === 'A1').wordCount).toBe(2);
       const filtered = await request(app).get('/api/words').query({ sourceLanguage: 'es', targetLanguage: 'en', collectionId: first.body.id, wordType: 'verb', search: 'DORMIR' }).expect(200);
       expect(filtered.body).toHaveLength(1);
       expect(filtered.body[0].collectionIds).toEqual([first.body.id, important.body.id]);
-      await request(app).delete(`/api/collections/${first.body.id}/words/${verb.body.id}`).expect(204);
+      await request(app).delete(`/api/collections/${first.body.id}/words/${verb.body.id}`).set('Content-Type', 'application/json').expect(204);
       expect((await request(app).get('/api/words').query({ collectionId: first.body.id, wordType: 'verb' })).body).toHaveLength(0);
       expect((await request(app).get('/api/words').query({ collectionId: important.body.id })).body).toHaveLength(1);
-      await request(app).delete(`/api/collections/${first.body.id}`).expect(204);
+      await request(app).delete(`/api/collections/${first.body.id}`).set('Content-Type', 'application/json').expect(204);
       expect((await request(app).get('/api/words').query({ sourceLanguage: 'es', targetLanguage: 'en' })).body).toHaveLength(2);
     } finally {
-      await request(app).delete(`/api/words/${verb.body.id}`).expect(204);
-      await request(app).delete(`/api/words/${adjective.body.id}`).expect(204);
-      await request(app).delete(`/api/collections/${important.body.id}`).expect(204);
-      await request(app).delete(`/api/collections/${german.body.id}`).expect(204);
+      await request(app).delete(`/api/words/${verb.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).delete(`/api/words/${adjective.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).delete(`/api/collections/${important.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).delete(`/api/collections/${german.body.id}`).set('Content-Type', 'application/json').expect(204);
     }
   });
 
@@ -188,18 +213,18 @@ describe('API y SQL del diccionario', () => {
     const collection = await request(app).post('/api/collections').send({ name: 'A1', sourceLanguage: 'es', targetLanguage: 'en' }).expect(201);
     const created = await request(app).post('/api/words').send({ ...word, term: 'casa', translation: 'house', sourceLanguage: 'es', targetLanguage: 'en' }).expect(201);
     try {
-      await request(app).post(`/api/collections/${collection.body.id}/words/${created.body.id}`).expect(204);
+      await request(app).post(`/api/collections/${collection.body.id}/words/${created.body.id}`).set('Content-Type', 'application/json').expect(204);
       const updated = await request(app).put(`/api/words/${created.body.id}`).send({ ...word, term: 'Haus', translation: 'casa', sourceLanguage: 'de', targetLanguage: 'es' }).expect(200);
       expect(updated.body.sourceLanguage).toBe('de');
       expect((await request(app).get('/api/words').query({ collectionId: collection.body.id })).body).toEqual([]);
       await request(app).post('/api/collections').send({ name: ' ', sourceLanguage: 'es', targetLanguage: 'en' }).expect(400);
       await request(app).post('/api/collections').send({ name: 'a'.repeat(81), sourceLanguage: 'es', targetLanguage: 'en' }).expect(400);
       await request(app).get('/api/words?collectionId=abc').expect(400);
-      await request(app).post(`/api/collections/${collection.body.id}/words/999999`).expect(404);
-      await request(app).delete('/api/collections/invalid').expect(400);
+      await request(app).post(`/api/collections/${collection.body.id}/words/999999`).set('Content-Type', 'application/json').expect(404);
+      await request(app).delete('/api/collections/invalid').set('Content-Type', 'application/json').expect(400);
     } finally {
-      await request(app).delete(`/api/words/${created.body.id}`).expect(204);
-      await request(app).delete(`/api/collections/${collection.body.id}`).expect(204);
+      await request(app).delete(`/api/words/${created.body.id}`).set('Content-Type', 'application/json').expect(204);
+      await request(app).delete(`/api/collections/${collection.body.id}`).set('Content-Type', 'application/json').expect(204);
     }
   });
 
@@ -214,7 +239,7 @@ describe('API y SQL del diccionario', () => {
     expect(edited.body.englishVerbForms).toEqual(created.body.englishVerbForms);
     const changedType = await request(app).put(`/api/words/${id}`).send({ ...oldClient, wordType: 'noun' }).expect(200);
     expect(changedType.body.englishVerbForms).toEqual({});
-    await request(app).delete(`/api/words/${id}`).expect(204);
+    await request(app).delete(`/api/words/${id}`).set('Content-Type', 'application/json').expect(204);
   });
 
   it.each([
@@ -240,7 +265,7 @@ describe('API y SQL del diccionario', () => {
     expect((await request(app).get('/api/words')).body.find((entry: { id: number }) => entry.id === created.body.id).examples).toEqual(expected);
     const updated = await request(app).put(`/api/words/${created.body.id}`).send({ ...word, examples: [{ text: 'I read a book.', translation: 'He leído un libro.' }] }).expect(200);
     expect(updated.body.examples).toEqual([{ text: 'I read a book.', translation: 'He leído un libro.' }]);
-    await request(app).delete(`/api/words/${created.body.id}`).expect(204);
+    await request(app).delete(`/api/words/${created.body.id}`).set('Content-Type', 'application/json').expect(204);
   });
 
   it.each([
@@ -270,7 +295,7 @@ describe('API y SQL del diccionario', () => {
       expect(reversed.body.map((entry: { id: number }) => entry.id)).toEqual([ids[1]]);
       expect((await request(app).get('/api/words').query({ sourceLanguage: 'es', targetLanguage: 'ja' })).body).toEqual([]);
     } finally {
-      for (const id of ids) await request(app).delete(`/api/words/${id}`).expect(204);
+      for (const id of ids) await request(app).delete(`/api/words/${id}`).set('Content-Type', 'application/json').expect(204);
     }
   });
 
@@ -294,8 +319,8 @@ describe('API y SQL del diccionario', () => {
     const updated = await request(app).put(`/api/words/${id}`).send({ ...word, term: 'notebook', examples: ['My notebook.'] }).expect(200);
     expect(updated.body.term).toBe('notebook');
     expect(updated.body.examples).toEqual([{ text: 'My notebook.', translation: '' }]);
-    await request(app).delete(`/api/words/${id}`).expect(204);
-    await request(app).delete(`/api/words/${id}`).expect(404);
+    await request(app).delete(`/api/words/${id}`).set('Content-Type', 'application/json').expect(204);
+    await request(app).delete(`/api/words/${id}`).set('Content-Type', 'application/json').expect(404);
     expect((await request(app).get('/api/words')).body).toEqual([]);
   });
 
@@ -310,8 +335,8 @@ describe('API y SQL del diccionario', () => {
   });
 
   it('maneja identificadores inválidos, filtros, JSON incorrecto y registros inexistentes', async () => {
-    await request(app).delete('/api/words/no-es-un-id').expect(400);
-    await request(app).delete('/api/words/2147483648').expect(400);
+    await request(app).delete('/api/words/no-es-un-id').set('Content-Type', 'application/json').expect(400);
+    await request(app).delete('/api/words/2147483648').set('Content-Type', 'application/json').expect(400);
     await request(app).get('/api/words?language=xx').expect(400);
     await request(app).put('/api/words/99999').send(word).expect(404);
     await request(app).post('/api/words').set('Content-Type', 'application/json').send('{').expect(400);
@@ -322,7 +347,7 @@ describe('API y SQL del diccionario', () => {
     const created = await request(app).post('/api/words').send({ ...word, term: "'; DROP TABLE words; --" }).expect(201);
     const found = await request(app).get('/api/words').query({ search: "'; DROP TABLE" }).expect(200);
     expect(found.body[0].term).toBe("'; DROP TABLE words; --");
-    await request(app).delete(`/api/words/${created.body.id}`).expect(204);
+    await request(app).delete(`/api/words/${created.body.id}`).set('Content-Type', 'application/json').expect(204);
   });
 
   it('carga demostración una vez y no la repone tras borrar la colección', async () => {

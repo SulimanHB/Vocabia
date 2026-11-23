@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import type { Database } from './database.js';
-import { collectionFiltersSchema, collectionSchema } from './validation.js';
-
-const validId = (value: string | undefined) => /^[1-9]\d*$/.test(value ?? '') && Number.isSafeInteger(Number(value)) && Number(value) <= 2147483647;
+import { collectionFiltersSchema, collectionSchema, validId } from './validation.js';
 
 export function createCollectionsRouter(db: Database) {
   const router = Router();

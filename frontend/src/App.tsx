@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { languages, request, type Word, type WordInput } from './model';
 import { WordForm } from './WordForm';
 import { LanguageFlag } from './LanguageFlag';
+import { ThemeToggle } from './ThemeToggle';
 import { presentation } from './presentation';
 import { interfaceText, formatText, type UiKey } from './interfaceText';
 import { DictionaryPage } from './DictionaryPage';
@@ -18,7 +19,7 @@ const readView = (): AppView => window.location.pathname === '/estudio' ? 'study
 function readLanguagePreference(key: string, fallback: WordInput['targetLanguage']): WordInput['targetLanguage'] {
   try {
     const saved = localStorage.getItem(key);
-    if (saved && Object.hasOwn(languages, saved)) return saved as WordInput['targetLanguage'];
+    if (languages.includes(saved as WordInput['targetLanguage'])) return saved as WordInput['targetLanguage'];
   } catch {
     // Algunos navegadores bloquean el almacenamiento. La aplicación puede seguir usándose.
   }
@@ -153,7 +154,7 @@ export function App() {
   }
 
   return <>
-    <header className="topbar"><a className="brand" href="/" aria-label={ui.home} onClick={event => followInternalLink(event, 'dictionary')}><span className="brand-mark" aria-hidden="true">v.</span>vocabia<span className="brand-dot">.</span></a><span className="top-caption" lang={referenceLanguage}>{text.tagline}</span><nav className="app-nav" aria-label={navCopy.nav}><a href="/" aria-current={view === 'dictionary' ? 'page' : undefined} onClick={event => followInternalLink(event, 'dictionary')}>{navCopy.dictionary}</a><a href="/estudio" aria-current={view === 'study' ? 'page' : undefined} onClick={event => followInternalLink(event, 'study')}>{navCopy.study}</a></nav><span className="personal-badge" lang={referenceLanguage}>{text.personalSpace}</span></header>
+    <header className="topbar"><a className="brand" href="/" aria-label={ui.home} onClick={event => followInternalLink(event, 'dictionary')}><span className="brand-mark" aria-hidden="true">v.</span>vocabia<span className="brand-dot">.</span></a><span className="top-caption" lang={referenceLanguage}>{text.tagline}</span><nav className="app-nav" aria-label={navCopy.nav}><a href="/" aria-current={view === 'dictionary' ? 'page' : undefined} onClick={event => followInternalLink(event, 'dictionary')}>{navCopy.dictionary}</a><a href="/estudio" aria-current={view === 'study' ? 'page' : undefined} onClick={event => followInternalLink(event, 'study')}>{navCopy.study}</a></nav><span className="personal-badge" lang={referenceLanguage}>{text.personalSpace}</span><ThemeToggle label={ui.darkMode} /><button className="language-button" aria-label={formatText(ui.myLanguage, { language: ui.languages[referenceLanguage] })} title={ui.changeLanguage} aria-haspopup="dialog" onClick={() => languageSettings.current?.showModal()}><LanguageFlag language={referenceLanguage} /><span>{ui.languages[referenceLanguage]}</span></button></header>
     <main>
       {isDemo && <p className="demo-banner" role="note" lang={referenceLanguage}>{demoText[referenceLanguage]}</p>}
       {view === 'dictionary' ? <DictionaryPage referenceLanguage={referenceLanguage} studyLanguage={studyLanguage}
@@ -168,7 +169,6 @@ export function App() {
         onMark={(wordId, mark) => setWords(current => current.map(word => word.id === wordId ? { ...word, studyMark: mark } : word))} />}
       <footer lang={referenceLanguage}><span>vocabia · {text.footer}</span><span>{text.footerMessage}</span></footer>
     </main>
-    <button className="language-button" aria-label={formatText(ui.myLanguage, { language: ui.languages[referenceLanguage] })} title={ui.changeLanguage} aria-haspopup="dialog" onClick={() => languageSettings.current?.showModal()}><LanguageFlag language={referenceLanguage} /><span>{ui.languages[referenceLanguage]}</span></button>
     <dialog ref={editor} aria-labelledby="editor-title" onCancel={event => { if (busy) event.preventDefault(); }} onClose={() => { setEditing(null); setEditorOpen(false); }}>
       <div className="dialog-heading"><h2 id="editor-title">{editing ? ui.editTitle : ui.newTitle}</h2><button className="close-button" aria-label={ui.closeForm} disabled={busy} onClick={() => editor.current?.close()}>×</button></div>
       {editorOpen && <WordForm key={editing?.id ?? `new-${revision}`} initial={editing ?? undefined} referenceLanguage={referenceLanguage} studyLanguage={studyLanguage} busy={busy} onSave={save} onCancel={() => editor.current?.close()} />}

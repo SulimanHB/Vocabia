@@ -42,7 +42,7 @@ it('une contenido y colecciones, conserva la segunda tarjeta hasta que se confir
 
   const latest = await request(app).get('/api/words/merge/latest?sourceLanguage=es&targetLanguage=en').expect(200);
   expect(latest.body).toMatchObject({ term: 'dormir', translation: 'sleep' });
-  await request(app).post(`/api/words/merge/${latest.body.id}/undo`).expect(200);
+  await request(app).post(`/api/words/merge/${latest.body.id}/undo`).set('Content-Type', 'application/json').expect(200);
   const restored = (await request(app).get('/api/words').expect(200)).body;
   expect(restored.find((item: { id: number }) => item.id === source.body.id)).toMatchObject({
     notes: 'Nota A2', examples: sourceWord.examples, collectionIds: [a2.body.id], studyMark: 'difficult',
@@ -50,9 +50,9 @@ it('une contenido y colecciones, conserva la segunda tarjeta hasta que se confir
   expect(restored.find((item: { id: number }) => item.id === keep.body.id)).toMatchObject({
     notes: mergedWord.notes, collectionIds: [a1.body.id, a2.body.id],
   });
-  await request(app).post(`/api/words/merge/${latest.body.id}/undo`).expect(404);
+  await request(app).post(`/api/words/merge/${latest.body.id}/undo`).set('Content-Type', 'application/json').expect(404);
   const previous = await request(app).get('/api/words/merge/latest?sourceLanguage=es&targetLanguage=en').expect(200);
-  await request(app).post(`/api/words/merge/${previous.body.id}/undo`).expect(200);
+  await request(app).post(`/api/words/merge/${previous.body.id}/undo`).set('Content-Type', 'application/json').expect(200);
   const original = (await request(app).get('/api/words').expect(200)).body;
   expect(original.find((item: { id: number }) => item.id === keep.body.id)).toMatchObject({
     notes: 'Nota A1', examples: base.examples, collectionIds: [a1.body.id], studyMark: 'known',
@@ -66,7 +66,7 @@ it('no deshace si la tarjeta se editó después de fusionar', async () => {
     deleteSource: true, word: { ...base, term: 'andar', translation: 'walk', notes: 'Fusionada' } }).expect(200);
   const latest = await request(app).get('/api/words/merge/latest?sourceLanguage=es&targetLanguage=en').expect(200);
   await request(app).put(`/api/words/${keep.body.id}`).send({ ...base, term: 'andar', translation: 'walk', notes: 'Cambio posterior' }).expect(200);
-  await request(app).post(`/api/words/merge/${latest.body.id}/undo`).expect(409);
+  await request(app).post(`/api/words/merge/${latest.body.id}/undo`).set('Content-Type', 'application/json').expect(409);
   const after = (await request(app).get('/api/words').expect(200)).body;
   expect(after.find((item: { id: number }) => item.id === keep.body.id).notes).toBe('Cambio posterior');
   expect(after.some((item: { id: number }) => item.id === source.body.id)).toBe(false);
@@ -99,4 +99,10 @@ it('rechaza tarjetas distintas y revierte la actualización si falla la relació
   const after = (await request(app).get('/api/words').expect(200)).body;
   expect(after.find((item: { id: number }) => item.id === keep.body.id).notes).toBe('Nota A1');
   expect(after.some((item: { id: number }) => item.id === source.body.id)).toBe(true);
+});
+
+it('rechaza identificadores de deshacer con formato no decimal', async () => {
+  for (const id of ['0x10', '1e1', '01', '2147483648']) {
+    await request(app).post(`/api/words/merge/${id}/undo`).set('Content-Type', 'application/json').expect(400);
+  }
 });

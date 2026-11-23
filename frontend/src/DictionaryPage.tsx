@@ -51,8 +51,7 @@ export function DictionaryPage({ referenceLanguage, studyLanguage, selectedColle
     onNotice(null);
     try {
       const [allWords, allCollections] = await Promise.all([request<Word[]>('/words'), request<Collection[]>('/collections')]);
-      downloadExport(allWords, allCollections);
-      onNotice('wordsExported');
+      onNotice(downloadExport(allWords, allCollections) ? 'wordsExported' : 'exportTooLarge');
     } catch {
       setExportError(true);
     } finally {

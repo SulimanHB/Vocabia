@@ -1,7 +1,9 @@
 import { languages, wordTypes, type EnglishVerbForms, type Example, type WordInput } from './model';
+import { collectionKey } from './compareImport';
 
-export const maxImportBytes = 2 * 1024 * 1024;
-const maxWords = 5000;
+// Por debajo de los 3 MB del backend: la petición de importación añade un pequeño envoltorio al documento.
+export const maxImportBytes = Math.floor(2.9 * 1024 * 1024);
+export const maxWords = 5000;
 const maxCollections = 500;
 
 type Language = WordInput['sourceLanguage'];
@@ -20,10 +22,9 @@ export class ImportPreviewError extends Error {
 }
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const language = (value: unknown): value is Language => typeof value === 'string' && Object.hasOwn(languages, value);
+const language = (value: unknown): value is Language => languages.includes(value as Language);
 const text = (value: unknown, max: number, required = false): value is string =>
   typeof value === 'string' && value.length <= max && (!required || value.trim().length > 0);
-const collectionKey = (source: string, target: string, name: string) => `${source}:${target}:${name.trim().toLocaleLowerCase()}`;
 
 function validCollection(value: unknown): value is ExportedCollection {
   return record(value) && text(value.name, 80, true) && language(value.sourceLanguage) &&
@@ -37,7 +38,7 @@ function validExample(value: unknown): value is Example {
 function validWord(value: unknown, collections: Map<string, ExportedCollection>): value is ExportedWord {
   if (!record(value) || !text(value.term, 120, true) || !text(value.translation, 200, true) ||
     !language(value.sourceLanguage) || !language(value.targetLanguage) || value.sourceLanguage === value.targetLanguage ||
-    typeof value.wordType !== 'string' || !Object.hasOwn(wordTypes, value.wordType) ||
+    !wordTypes.includes(value.wordType as WordInput['wordType']) ||
     !text(value.notes, 2000) || !Array.isArray(value.examples) || value.examples.length < 1 ||
     value.examples.length > 10 || !value.examples.every(validExample) || !record(value.englishVerbForms) ||
     !Array.isArray(value.collections)) return false;

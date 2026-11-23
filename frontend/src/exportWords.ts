@@ -1,4 +1,5 @@
 import type { Collection, Word } from './model';
+import { maxImportBytes, maxWords } from './importPreview';
 
 // El formato versionado permitirá validar una importación futura sin depender de IDs locales.
 export function createExportDocument(words: Word[], collections: Collection[], exportedAt: Date) {
@@ -20,10 +21,12 @@ export function createExportDocument(words: Word[], collections: Collection[], e
   };
 }
 
+// Devuelve false si el archivo no se podrá volver a importar entero por tamaño o número de palabras.
 export function downloadExport(words: Word[], collections: Collection[]) {
   const date = new Date();
-  const content = JSON.stringify(createExportDocument(words, collections, date), null, 2);
-  const url = URL.createObjectURL(new Blob([content], { type: 'application/json;charset=utf-8' }));
+  // Sin sangría: con ella, unas 3000 palabras ya superan el límite de importación.
+  const blob = new Blob([JSON.stringify(createExportDocument(words, collections, date))], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = `vocabia-colecciones-${date.toISOString().slice(0, 10)}.json`;
@@ -34,4 +37,5 @@ export function downloadExport(words: Word[], collections: Collection[]) {
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  return blob.size <= maxImportBytes && words.length <= maxWords;
 }

@@ -35,35 +35,20 @@ export function openDatabase(): Database {
   return new PGlite(fileURLToPath(new URL('../data/', import.meta.url)));
 }
 
+const migrations = ['001_initial', '002_example_translations', '003_english_verb_forms', '004_collections',
+  '005_study_rounds', '006_merge_history', '007_word_study_mark'];
+
 export async function initializeDatabase(db: Database, seed = true) {
-  const sql = await readFile(new URL('../../database/001_initial.sql', import.meta.url), 'utf8');
-  // El script inicial no tiene funciones SQL ni puntos y coma dentro de cadenas.
-  for (const statement of sql.split(';').filter(part => part.trim())) await db.query(statement);
   await db.query('CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
-  const migration = await readFile(new URL('../../database/002_example_translations.sql', import.meta.url), 'utf8');
-  await db.query(migration);
-  // El ALTER TABLE es repetible; si falla el registro, el siguiente arranque lo completa.
-  const verbMigration = await readFile(new URL('../../database/003_english_verb_forms.sql', import.meta.url), 'utf8');
-  await db.query(verbMigration);
-  await db.query("INSERT INTO app_migrations(name) VALUES ('003_english_verb_forms') ON CONFLICT DO NOTHING");
-  const collectionsMigration = await readFile(new URL('../../database/004_collections.sql', import.meta.url), 'utf8');
-  for (const statement of collectionsMigration.split(';').filter(part => part.trim())) await db.query(statement);
-  await db.query("INSERT INTO app_migrations(name) VALUES ('004_collections') ON CONFLICT DO NOTHING");
-  const studyMigration = await readFile(new URL('../../database/005_study_rounds.sql', import.meta.url), 'utf8');
-  await db.transaction(async tx => {
-    for (const statement of studyMigration.split(';').filter(part => part.trim())) await tx.query(statement);
-    await tx.query("INSERT INTO app_migrations(name) VALUES ('005_study_rounds') ON CONFLICT DO NOTHING");
-  });
-  const mergeMigration = await readFile(new URL('../../database/006_merge_history.sql', import.meta.url), 'utf8');
-  await db.transaction(async tx => {
-    for (const statement of mergeMigration.split(';').filter(part => part.trim())) await tx.query(statement);
-    await tx.query("INSERT INTO app_migrations(name) VALUES ('006_merge_history') ON CONFLICT DO NOTHING");
-  });
-  const markMigration = await readFile(new URL('../../database/007_word_study_mark.sql', import.meta.url), 'utf8');
-  await db.transaction(async tx => {
-    await tx.query(markMigration);
-    await tx.query("INSERT INTO app_migrations(name) VALUES ('007_word_study_mark') ON CONFLICT DO NOTHING");
-  });
+  // Todas son repetibles (IF NOT EXISTS o con su propia comprobación) y se aplican en cada arranque.
+  for (const name of migrations) {
+    const sql = await readFile(new URL(`../../database/${name}.sql`, import.meta.url), 'utf8');
+    // Los scripts no tienen funciones SQL ni puntos y coma dentro de cadenas o comentarios.
+    await db.transaction(async tx => {
+      for (const statement of sql.split(';').filter(part => part.trim())) await tx.query(statement);
+      await tx.query('INSERT INTO app_migrations(name) VALUES ($1) ON CONFLICT DO NOTHING', [name]);
+    });
+  }
   if (!seed) return;
   const examples = [
     ['serendipity', 'casualidad afortunada', 'en', 'es', 'noun', 'Encontrar algo valioso cuando buscabas otra cosa.', ['Finding this book was pure serendipity.']],

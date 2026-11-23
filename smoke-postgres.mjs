@@ -37,7 +37,7 @@ try {
   await initializeDatabase(db, false);
   const migrations = await db.query('SELECT name FROM app_migrations ORDER BY name');
   assert.deepEqual(migrations.rows.map(row => row.name), [
-    '002_example_translations', '003_english_verb_forms', '004_collections',
+    '001_initial', '002_example_translations', '003_english_verb_forms', '004_collections',
     '005_study_rounds', '006_merge_history', '007_word_study_mark',
   ]);
   console.log('OK: conexión, migraciones iniciales y segundo arranque');
@@ -62,7 +62,7 @@ try {
   assert.deepEqual(afterMerge[0].collectionIds, [a1.id, a2.id]);
   assert.deepEqual(afterMerge[0].examples, merged.examples);
   const latest = (await request(app).get('/api/words/merge/latest?sourceLanguage=es&targetLanguage=en').expect(200)).body;
-  await request(app).post(`/api/words/merge/${latest.id}/undo`).expect(200);
+  await request(app).post(`/api/words/merge/${latest.id}/undo`).set('Content-Type', 'application/json').expect(200);
   const restored = (await request(app).get('/api/words').expect(200)).body;
   assert.equal(restored.length, 2);
   assert.equal(restored.find(word => word.id === source.id).studyMark, 'difficult');

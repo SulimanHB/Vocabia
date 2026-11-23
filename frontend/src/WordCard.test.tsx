@@ -41,10 +41,22 @@ it('no inventa un pasado ausente ni un futuro con varias traducciones', () => {
   expect(englishFuture('can')).toBeNull();
 });
 
-it('conserva las etiquetas de la tarjeta al cambiar el idioma de la interfaz', () => {
+it('traduce las etiquetas de la tarjeta al idioma de la interfaz', () => {
   renderCard(verb, 'en');
-  expect(screen.getByText('Verbo')).toBeVisible();
-  expect(screen.getByRole('article').querySelector('.language-pair')).toHaveTextContent('Español →a Inglés');
-  expect(screen.getByRole('button', { name: 'Editar dormir' })).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Borrar dormir' })).toBeVisible();
+  expect(screen.getByText('Verb')).toBeVisible();
+  expect(screen.getByRole('article').querySelector('.language-pair')).toHaveTextContent('Spanish →to English');
+  expect(screen.getByRole('button', { name: 'Edit dormir' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Delete dormir' })).toBeVisible();
+  expect(screen.getByRole('article').querySelector('[lang="es"]:not(h3):not(blockquote)')).toBeNull();
+});
+
+it('ofrece escuchar la palabra despacio con el botón del caracol', async () => {
+  const speak = vi.fn();
+  vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn() });
+  vi.stubGlobal('SpeechSynthesisUtterance', class { lang = ''; rate = 1; constructor(public text: string) {} });
+  renderCard(verb);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Escuchar Presente (forma base): sleep' }));
+  await user.click(screen.getByRole('button', { name: 'Escuchar despacio Presente (forma base): sleep' }));
+  expect(speak.mock.calls.map(call => [call[0].text, call[0].rate])).toEqual([['sleep', 0.85], ['sleep', 0.5]]);
 });

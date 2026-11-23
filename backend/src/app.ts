@@ -1,7 +1,7 @@
 import express, { type ErrorRequestHandler } from 'express';
 import { z } from 'zod';
 import type { Database } from './database.js';
-import { filtersSchema, wordCreationFiltersSchema, wordSchema } from './validation.js';
+import { filtersSchema, validId, wordCreationFiltersSchema, wordSchema } from './validation.js';
 import { createCollectionsRouter } from './collections.js';
 import { createImportRouter } from './importWords.js';
 import { createStudyRoundsRouter } from './studyRounds.js';
@@ -9,10 +9,23 @@ import { createMergeRouter } from './mergeWords.js';
 
 const columns = `id, term, translation, source_language AS "sourceLanguage", target_language AS "targetLanguage", word_type AS "wordType", notes, examples, english_verb_forms AS "englishVerbForms", study_mark AS "studyMark"`;
 
-export function createApp(db: Database) {
+export function createApp(db: Database, { importLimit = { bytes: '3mb', words: 5000 }, allowedHosts }: {
+  importLimit?: { bytes: string; words: number }; allowedHosts?: string[];
+} = {}) {
   const app = express();
   app.disable('x-powered-by');
-  app.use('/api/import', express.json({ limit: '3mb' }), createImportRouter(db));
+  // DNS rebinding: una web con un dominio que resuelve a 127.0.0.1 llega con su propio Host.
+  if (allowedHosts) app.use((req, res, next) => {
+    if (allowedHosts.includes(req.headers.host ?? '')) { next(); return; }
+    res.status(403).json({ error: 'Host no permitido.' });
+  });
+  // CSRF: un formulario o fetch "simple" de otra web no puede enviar application/json sin preflight CORS.
+  app.use((req, res, next) => {
+    const type = req.headers['content-type']?.split(';')[0].trim().toLowerCase();
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || type === 'application/json') { next(); return; }
+    res.status(415).json({ error: 'Las escrituras deben enviarse como application/json.' });
+  });
+  app.use('/api/import', express.json({ limit: importLimit.bytes }), createImportRouter(db, importLimit.words));
   app.use(express.json({ limit: '32kb' }));
   app.use('/api/collections', createCollectionsRouter(db));
   app.use('/api/study-rounds', createStudyRoundsRouter(db));
@@ -62,7 +75,7 @@ export function createApp(db: Database) {
   });
 
   app.use('/api/words/:id', (req, res, next) => {
-    if (!/^[1-9]\d*$/.test(req.params.id ?? '') || !Number.isSafeInteger(Number(req.params.id)) || Number(req.params.id) > 2147483647) {
+    if (!validId(req.params.id)) {
       res.status(400).json({ error: 'El identificador no es válido.' }); return;
     }
     next();

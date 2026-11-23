@@ -12,7 +12,7 @@ export interface ImportComparison {
 
 // Son pistas para revisar, no decisiones automáticas sobre qué datos conservar.
 const normalized = (value: string) => value.trim().normalize('NFC').toLowerCase();
-const collectionKey = (source: string, target: string, name: string) => JSON.stringify([source, target, normalized(name)]);
+export const collectionKey = (source: string, target: string, name: string) => JSON.stringify([source, target, normalized(name)]);
 export const wordKey = (source: string, target: string, term: string, translation: string) =>
   JSON.stringify([source, target, normalized(term), normalized(translation)]);
 

@@ -3,7 +3,7 @@ import { request, type StudyRound, type Word, type WordInput } from './model';
 import { verbFormsText } from './verbFormsText';
 import { StudyHistory } from './StudyHistory';
 import { studyMarkText } from './studyMarkText';
-import { normalizeStudyAnswer } from './studyAnswers';
+import { matchesStudyAnswer } from './studyAnswers';
 import { shuffle } from './shuffle';
 
 export const studyModeText: Record<WordInput['sourceLanguage'], {
@@ -66,9 +66,10 @@ interface Props {
   difficultOnly?: boolean;
   onMark?: (wordId: number, mark: 'known' | 'difficult') => void;
   onNoWords?: () => void;
+  onPracticeDifficult?: () => void;
 }
 
-export function StudyMode({ words, language, studyLanguage, difficultOnly = false, onMark, onNoWords }: Props) {
+export function StudyMode({ words, language, studyLanguage, difficultOnly = false, onMark, onNoWords, onPracticeDifficult }: Props) {
   const [deck, setDeck] = useState(() => shuffle(makeQuestions(words)));
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -81,6 +82,7 @@ export function StudyMode({ words, language, studyLanguage, difficultOnly = fals
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [historyRevision, setHistoryRevision] = useState(0);
   const [ratedWords, setRatedWords] = useState<Record<number, 'known' | 'difficult'>>({});
+  const [roundMarks, setRoundMarks] = useState<Record<number, 'known' | 'difficult'>>({});
   const [ratingBusy, setRatingBusy] = useState(false);
   const [ratingError, setRatingError] = useState(false);
   const saveStarted = useRef(false);
@@ -136,6 +138,7 @@ export function StudyMode({ words, language, studyLanguage, difficultOnly = fals
     setWrittenCount(0);
     setMatchedCount(0);
     setSaveStatus('idle');
+    setRoundMarks({});
     resetQuestion();
   }
 
@@ -146,6 +149,7 @@ export function StudyMode({ words, language, studyLanguage, difficultOnly = fals
     try {
       await request(`/words/${word.id}/study-mark`, { method: 'PUT', body: JSON.stringify({ mark }) });
       setRatedWords(current => ({ ...current, [word.id]: mark }));
+      setRoundMarks(current => ({ ...current, [word.id]: mark }));
       onMark?.(word.id, mark);
     } catch { setRatingError(true); }
     finally { setRatingBusy(false); }
@@ -154,12 +158,15 @@ export function StudyMode({ words, language, studyLanguage, difficultOnly = fals
   function checkAnswer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!answer.trim() || revealed) return;
-    const correct = normalizeStudyAnswer(answer, word.targetLanguage) === normalizeStudyAnswer(question.expected, word.targetLanguage);
+    const correct = matchesStudyAnswer(answer, question.expected, word.targetLanguage);
     setMatches(correct);
     setWrittenCount(count => count + 1);
     if (correct) setMatchedCount(count => count + 1);
     setRevealed(true);
   }
+
+  const marked = Object.values(roundMarks);
+  const difficultTotal = words.filter(item => (ratedWords[item.id] ?? item.studyMark) === 'difficult').length;
 
   if (finished) return <><section className="practice-card practice-summary" aria-label={copy.practice}>
     <h3>{summary.title}</h3>
@@ -167,10 +174,15 @@ export function StudyMode({ words, language, studyLanguage, difficultOnly = fals
       <div><dt>{summary.reviewed}</dt><dd>{deck.length}</dd></div>
       <div><dt>{summary.written}</dt><dd>{writtenCount}</dd></div>
       <div><dt>{summary.matched}</dt><dd>{matchedCount}</dd></div>
+      <div><dt>{markCopy.known}</dt><dd>{marked.filter(mark => mark === 'known').length}</dd></div>
+      <div><dt>{markCopy.difficult}</dt><dd>{marked.filter(mark => mark === 'difficult').length}</dd></div>
     </dl>
     <p>{summary.help}</p>
     <p className={saveStatus === 'error' ? 'study-save-error' : 'study-save-status'} role="status">{saveStatus === 'saving' ? summary.saving : saveStatus === 'saved' ? summary.saved : saveStatus === 'error' ? summary.saveError : ''}</p>
-    <button type="button" className="primary" disabled={saveStatus === 'saving'} onClick={startRound}>{copy.newRound}</button>
+    <div className="practice-actions">
+      {!difficultOnly && difficultTotal > 0 && onPracticeDifficult && <button type="button" className="secondary" onClick={onPracticeDifficult}>{markCopy.retryDifficult} ({difficultTotal})</button>}
+      <button type="button" className="primary" disabled={saveStatus === 'saving'} onClick={startRound}>{copy.newRound}</button>
+    </div>
   </section><StudyHistory sourceLanguage={language} targetLanguage={studyLanguage} revision={historyRevision} /></>;
 
   return <><section className="practice-card" aria-label={copy.practice}>

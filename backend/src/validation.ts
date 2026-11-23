@@ -3,6 +3,12 @@ import { z } from 'zod';
 export const languages = ['es', 'en', 'fr', 'de', 'it', 'pt', 'ja'] as const;
 export const wordTypes = ['noun', 'verb', 'adjective', 'adverb', 'expression', 'other'] as const;
 
+// Entero decimal positivo dentro del rango de INTEGER de Postgres (rechaza 0x10, 1e1, 01…).
+export const validId = (value: string | undefined) => /^[1-9]\d*$/.test(value ?? '') && Number(value) <= 2147483647;
+
+export const pairSchema = z.object({ sourceLanguage: z.enum(languages), targetLanguage: z.enum(languages) })
+  .strict().refine(pair => pair.sourceLanguage !== pair.targetLanguage);
+
 const exampleText = z.string().trim().min(1).max(500);
 const exampleSchema = z.object({
   text: exampleText,
@@ -30,17 +36,23 @@ export const wordSchema = z.object({
   message: 'Las formas inglesas solo se guardan para verbos traducidos al inglés.', path: ['englishVerbForms'],
 });
 
-export const filtersSchema = z.object({
-  search: z.string().trim().max(120).default(''),
-  language: z.enum(languages).optional(),
-  wordType: z.enum(wordTypes).optional(),
+const idParam = z.string().refine(validId).transform(Number);
+
+// Pareja opcional: o los dos idiomas (distintos) o ninguno.
+export const collectionFiltersSchema = z.object({
   sourceLanguage: z.enum(languages).optional(),
   targetLanguage: z.enum(languages).optional(),
-  collectionId: z.coerce.number().int().positive().max(2147483647).optional(),
 }).refine(filters => (filters.sourceLanguage === undefined) === (filters.targetLanguage === undefined), {
   message: 'Indica los dos idiomas de la pareja.',
 }).refine(filters => !filters.sourceLanguage || filters.sourceLanguage !== filters.targetLanguage, {
   message: 'Los idiomas deben ser distintos.',
+});
+
+export const filtersSchema = collectionFiltersSchema.safeExtend({
+  search: z.string().trim().max(120).default(''),
+  language: z.enum(languages).optional(),
+  wordType: z.enum(wordTypes).optional(),
+  collectionId: idParam.optional(),
 });
 
 export const collectionSchema = z.object({
@@ -51,17 +63,6 @@ export const collectionSchema = z.object({
   message: 'Los idiomas deben ser distintos.', path: ['targetLanguage'],
 });
 
-export const collectionFiltersSchema = z.object({
-  sourceLanguage: z.enum(languages).optional(),
-  targetLanguage: z.enum(languages).optional(),
-}).refine(filters => (filters.sourceLanguage === undefined) === (filters.targetLanguage === undefined), {
-  message: 'Indica los dos idiomas de la pareja.',
-}).refine(filters => !filters.sourceLanguage || filters.sourceLanguage !== filters.targetLanguage, {
-  message: 'Los idiomas deben ser distintos.',
-});
-
-export const wordCreationFiltersSchema = z.object({
-  collectionId: z.string().regex(/^[1-9]\d*$/).transform(Number).pipe(z.number().int().max(2147483647)).optional(),
-}).strict();
+export const wordCreationFiltersSchema = z.object({ collectionId: idParam.optional() }).strict();
 
 export type WordInput = z.infer<typeof wordSchema>;

@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import { interfaceText } from './interfaceText';
 import type { Collection, Word } from './model';
 import { downloadExport } from './exportWords';
 import { createExportDocument } from './exportWords';
@@ -13,7 +14,7 @@ let collections: Collection[];
 let lastSearch = '';
 let mergeBackup: { keep: Word; source: Word } | null;
 beforeEach(() => {
-  vi.mocked(downloadExport).mockClear();
+  vi.mocked(downloadExport).mockClear().mockReturnValue(true);
   localStorage.clear();
   window.history.replaceState(null, '', '/');
   // jsdom no implementa los diálogos. Las pruebas simulan solo su apertura y cierre.
@@ -373,6 +374,15 @@ describe('Colección de palabras', () => {
     expect(screen.getByText('Archivo de colecciones preparado.')).toBeVisible();
   });
 
+  it('avisa si el archivo exportado no se podrá volver a importar entero', async () => {
+    vi.mocked(downloadExport).mockReturnValue(false);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'book' });
+    await user.click(screen.getByRole('button', { name: 'Exportar colecciones' }));
+    expect(await screen.findByText(/supera el límite de importación/)).toBeVisible();
+  });
+
   it('previsualiza un JSON exportado sin enviar datos ni cambiar las tarjetas', async () => {
     collections = [{ id: 5, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 1 }];
     words[0].collectionIds = [5];
@@ -519,7 +529,7 @@ describe('Colección de palabras', () => {
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(2));
     await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
     expect(window.location.pathname).toBe('/estudio');
-    await user.click(await screen.findByRole('button', { name: 'Practicar' }));
+    await user.click(await screen.findByRole('button', { name: 'Practicar (2)' }));
     const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
     expect(exercise.getByRole('heading', { name: 'dormir' })).toBeVisible();
     expect(exercise.queryByText('sleep')).not.toBeInTheDocument();
@@ -567,6 +577,32 @@ describe('Colección de palabras', () => {
     expect(screen.getByRole('heading', { name: 'Palabras disponibles: 1' })).toBeVisible();
   });
 
+  it('resume las marcas de la ronda y ofrece repasar las difíciles desde el resumen', async () => {
+    words = [
+      { ...words[0], id: 1, term: 'dormir', translation: 'sleep', studyMark: null },
+      { ...words[0], id: 2, term: 'beber', translation: 'drink', studyMark: null },
+    ];
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('heading', { name: 'dormir' });
+    await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
+    await user.click(await screen.findByRole('button', { name: 'Practicar (2)' }));
+    const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
+    while (exercise.queryByRole('button', { name: 'Mostrar respuesta' })) {
+      const term = exercise.getByRole('heading', { level: 3 }).textContent;
+      await user.click(exercise.getByRole('button', { name: 'Mostrar respuesta' }));
+      if (term === 'dormir' || term === 'beber') await user.click(exercise.getByRole('button', { name: term === 'dormir' ? 'Me costó' : 'La sabía' }));
+      await user.click(exercise.getByRole('button', { name: /Siguiente pregunta|Ver resumen/ }));
+    }
+    const summary = exercise.getByRole('heading', { name: 'Resumen de la ronda' }).closest('section')!;
+    expect(within(summary).getByText('Me costó').nextSibling).toHaveTextContent('1');
+    expect(within(summary).getByText('La sabía').nextSibling).toHaveTextContent('1');
+    await user.click(within(summary).getByRole('button', { name: 'Practicar las difíciles (1)' }));
+    const difficult = within(screen.getByRole('region', { name: 'Practicar' }));
+    expect(difficult.getByRole('heading', { name: 'dormir' })).toBeVisible();
+    expect(difficult.getByText(/^1 de \d+$/)).toBeVisible();
+  });
+
   it('repasa solo las difíciles de la colección seleccionada y sale al resolver la última', async () => {
     collections = [
       { id: 1, name: 'A1', sourceLanguage: 'es', targetLanguage: 'en', wordCount: 2 },
@@ -582,6 +618,7 @@ describe('Colección de palabras', () => {
     await user.click(await within(screen.getByRole('group', { name: 'Colecciones' })).findByRole('button', { name: 'A1 2' }));
     await user.click(within(screen.getByRole('navigation', { name: 'Secciones' })).getByRole('link', { name: 'Estudio' }));
     const difficultButton = await screen.findByRole('button', { name: 'Practicar las difíciles (1)' });
+    expect(difficultButton).toHaveAccessibleDescription('Repasa las palabras que marcaste con «Me costó».');
     await user.click(difficultButton);
     const exercise = within(screen.getByRole('region', { name: 'Practicar' }));
     expect(exercise.getByRole('heading', { name: 'dormir' })).toBeVisible();
@@ -591,7 +628,9 @@ describe('Colección de palabras', () => {
     await waitFor(() => expect(words[0].studyMark).toBe('known'));
     await user.click(exercise.getByRole('button', { name: 'Ver resumen' }));
     await user.click(exercise.getByRole('button', { name: 'Nueva ronda' }));
-    expect(await screen.findByRole('button', { name: 'Practicar las difíciles (0)' })).toBeDisabled();
+    const noDifficult = await screen.findByRole('button', { name: 'Practicar las difíciles (0)' });
+    expect(noDifficult).toBeDisabled();
+    expect(noDifficult).toHaveAccessibleDescription('Aún no hay ninguna: marca «Me costó» en una ronda para repasarlas aquí.');
     expect(screen.getByRole('heading', { name: 'Palabras disponibles: 2' })).toBeVisible();
   });
 
@@ -755,7 +794,7 @@ describe('Colección de palabras', () => {
     ['it', 'La mia raccolta', 'Aggiungi parola', 'Lingua della parola *', 'Salva parola', 'Annulla'],
     ['pt', 'A minha coleção', 'Adicionar palavra', 'Idioma da palavra *', 'Guardar palavra', 'Cancelar'],
     ['ja', 'マイコレクション', '単語を追加', '単語の言語 *', '単語を保存', 'キャンセル'],
-  ])('traduce colección y formulario en %s y conserva las tarjetas', async (code, heading, add, source, save, cancel) => {
+  ])('traduce colección, formulario y tarjetas en %s', async (code, heading, add, source, save, cancel) => {
     localStorage.setItem('vocabia.referenceLanguage', code);
     words[0].sourceLanguage = code as Word['sourceLanguage'];
     words[0].targetLanguage = code === 'en' ? 'es' : 'en';
@@ -767,7 +806,7 @@ describe('Colección de palabras', () => {
     const card = screen.getByRole('article');
     expect(card).toHaveTextContent('libro');
     expect(card).toHaveTextContent('A book.');
-    expect(card).toHaveTextContent('Sustantivo');
+    expect(card).toHaveTextContent(interfaceText[code as Word['sourceLanguage']].wordTypes.noun);
     const originalCard = card.outerHTML;
     await user.click(screen.getByRole('button', { name: add }));
     expect(screen.getByLabelText(source)).toBeVisible();
@@ -776,7 +815,7 @@ describe('Colección de palabras', () => {
     expect(screen.getByRole('article').outerHTML).toBe(originalCard);
   });
 
-  it('traduce filtros, contadores y avisos al cambiar a alemán sin cambiar las tarjetas', async () => {
+  it('traduce filtros, contadores y avisos al cambiar a alemán, también en las tarjetas', async () => {
     words.push({ ...words[0], id: 3, sourceLanguage: 'de' });
     const user = userEvent.setup();
     render(<App />);
@@ -790,8 +829,8 @@ describe('Colección de palabras', () => {
     expect(await screen.findByText('1 Wort gefunden')).toBeVisible();
     expect(screen.getByText('Referenzsprache: Deutsch. Sie wird für neue Übersetzungen verwendet.')).toBeVisible();
     expect(screen.getByRole('article')).toHaveTextContent('A book.');
-    expect(screen.getByRole('article')).toHaveTextContent('Alemán');
-    await user.click(screen.getByRole('button', { name: 'Borrar book' }));
+    expect(screen.getByRole('article')).toHaveTextContent('Deutsch');
+    await user.click(screen.getByRole('button', { name: 'Löschen book' }));
     expect(screen.getByRole('heading', { name: 'Dieses Wort löschen?' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Behalten' }));
     await user.type(screen.getByRole('searchbox'), 'missing');
@@ -838,7 +877,7 @@ describe('Colección de palabras', () => {
     expect(screen.getByLabelText('Langue du mot *')).toHaveValue('fr');
     expect(screen.getByLabelText('Langue de la traduction *')).toHaveValue('en');
     await user.click(screen.getByRole('button', { name: 'Annuler' }));
-    await user.click(await screen.findByRole('button', { name: 'Editar book' }));
+    await user.click(await screen.findByRole('button', { name: 'Modifier book' }));
     expect(screen.getByLabelText('Langue de la traduction *')).toHaveValue('en');
   });
 

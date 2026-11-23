@@ -30,10 +30,21 @@ describe('demo pública', () => {
     expect(secondCollection.body).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'A1', wordCount: 14 }), expect.objectContaining({ name: 'Viajes', wordCount: 4 })]));
   }, 30000);
 
+  it('ofrece la pareja inversa inglés → español para quien usa la interfaz en inglés', async () => {
+    const visitor = request.agent(demo.app);
+    const words = await visitor.get('/api/words').query({ sourceLanguage: 'en', targetLanguage: 'es' }).expect(200);
+    expect(words.body).toHaveLength(20);
+    const sleep = words.body.find((word: { term: string }) => word.term === 'sleep');
+    expect(sleep).toMatchObject({ translation: 'dormir', wordType: 'verb', englishVerbForms: {},
+      examples: [{ text: 'I need to sleep.', translation: 'Necesito dormir.' }, { text: 'The baby sleeps.', translation: 'El bebé duerme.' }] });
+    const collections = await visitor.get('/api/collections').query({ sourceLanguage: 'en', targetLanguage: 'es' }).expect(200);
+    expect(collections.body.map((c: { name: string; wordCount: number }) => `${c.name} ${c.wordCount}`).sort()).toEqual(['A1 14', 'A2 6', 'Viajes 4']);
+  }, 30000);
+
   it('ofrece palabras con ejemplos en cada idioma de estudio', async () => {
     const visitor = request.agent(demo.app);
     const all = await visitor.get('/api/words').expect(200);
-    expect(all.body).toHaveLength(40);
+    expect(all.body).toHaveLength(60);
     for (const language of ['fr', 'de', 'it', 'pt', 'ja']) {
       const response = await visitor.get('/api/words').query({ sourceLanguage: 'es', targetLanguage: language }).expect(200);
       expect(response.body).toHaveLength(4);
@@ -43,14 +54,72 @@ describe('demo pública', () => {
   }, 30000);
 
   it('declara que los datos de la demo son temporales', async () => {
-    await request(demo.app).get('/api/demo-info').expect(200, { demo: true, temporary: true });
+    const info = await request(demo.app).get('/api/demo-info').expect(200, { demo: true, temporary: true });
+    expect(info.headers['set-cookie']).toBeUndefined();
   });
 
-  it('limita las sesiones simultáneas para proteger la memoria del servidor', async () => {
+  it('solo responde 503 cuando todas las sesiones están atendiendo una petición', async () => {
     const limited = createDemoApp({ maxSessions: 1 });
     try {
-      await request.agent(limited.app).get('/api/words').expect(200);
-      await request.agent(limited.app).get('/api/words').expect(503);
+      const responses = await Promise.all([request(limited.app).get('/api/words'), request(limited.app).get('/api/words')]);
+      expect(responses.map(response => response.status).sort()).toEqual([200, 503]);
     } finally { await limited.close(); }
   }, 30000);
+
+  it('las visitas a la página sin cookie no ocupan sesiones', async () => {
+    const limited = createDemoApp({ maxSessions: 1 });
+    try {
+      for (let i = 0; i < 20; i++) {
+        const page = await request(limited.app).get(i % 2 ? '/estudio' : '/');
+        expect(page.headers['set-cookie']).toBeUndefined();
+      }
+      await request(limited.app).get('/api/words').expect(200);
+    } finally { await limited.close(); }
+  }, 30000);
+
+  it('con las sesiones llenas, una nueva sustituye a la inactiva más antigua', async () => {
+    const limited = createDemoApp({ maxSessions: 2 });
+    const query = { sourceLanguage: 'es', targetLanguage: 'en' };
+    try {
+      const oldest = request.agent(limited.app);
+      await oldest.post('/api/words').send({
+        term: 'efímera', translation: 'ephemeral', sourceLanguage: 'es', targetLanguage: 'en',
+        wordType: 'adjective', notes: '', examples: [{ text: 'Una sesión efímera.', translation: 'An ephemeral session.' }],
+      }).expect(201);
+      const second = request.agent(limited.app);
+      await second.get('/api/words').expect(200);
+      await request(limited.app).get('/api/words').expect(200);
+
+      const restarted = await oldest.get('/api/words').query(query).expect(200);
+      expect(restarted.body).toHaveLength(20);
+      expect(restarted.body.some((word: { term: string }) => word.term === 'efímera')).toBe(false);
+    } finally { await limited.close(); }
+  }, 30000);
+
+  it('limita la importación para no congelar la demo', async () => {
+    const visitor = request.agent(demo.app);
+    const document = (count: number) => ({
+      mode: 'includeMatches',
+      document: {
+        format: 'vocabia-words', version: 2, exportedAt: new Date().toISOString(), collections: [],
+        words: Array.from({ length: count }, (_, i) => ({
+          term: `importada ${i}`, translation: `imported ${i}`, sourceLanguage: 'es', targetLanguage: 'en',
+          wordType: 'noun', notes: '', examples: [{ text: `Ejemplo ${i}.`, translation: `Example ${i}.` }], collections: [],
+        })),
+      },
+    });
+    const tooMany = await visitor.post('/api/import').send(document(201));
+    expect([400, 413]).toContain(tooMany.status);
+    const tooBig = await visitor.post('/api/import').set('Content-Type', 'application/json').send(JSON.stringify({ padding: 'x'.repeat(250_000) }));
+    expect(tooBig.status).toBe(413);
+    await visitor.post('/api/import').send(document(20)).expect(201);
+  }, 30000);
+
+  it('envía cabeceras de seguridad', async () => {
+    const page = await request(demo.app).get('/api/demo-info');
+    expect(page.headers['x-content-type-options']).toBe('nosniff');
+    expect(page.headers['referrer-policy']).toBe('same-origin');
+    expect(page.headers['content-security-policy']).toBe(
+      "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none'");
+  });
 });

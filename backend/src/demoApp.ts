@@ -18,27 +18,37 @@ interface DemoSession {
   activeRequests: number;
 }
 
+// Pareja inversa inglés → español: con la interfaz en inglés, la demo no aparece vacía.
+const seedWords = [
+  ...demoWords.map(word => ({ ...word, sourceLanguage: 'es' as const })),
+  ...demoWords.filter(word => word.targetLanguage === 'en').map(word => ({
+    ...word, sourceLanguage: 'en' as const, targetLanguage: 'es' as const, term: word.translation, translation: word.term,
+    examples: word.examples.map(([text, translation]): [string, string] => [translation, text]),
+    englishVerbForms: undefined, // las formas inglesas solo se muestran cuando el inglés es la traducción
+  })),
+];
+
 async function createSession(): Promise<DemoSession> {
   const db = new PGlite();
   try {
     await initializeDatabase(db, false);
     await db.transaction(async tx => {
       const collections = new Map<string, number>();
-      for (const word of demoWords) {
+      for (const word of seedWords) {
         const inserted = await tx.query<{ id: number }>(
           `INSERT INTO words(term,translation,source_language,target_language,word_type,notes,examples,english_verb_forms)
-           VALUES ($1,$2,'es',$3,$4,'',$5::jsonb,$6::jsonb) RETURNING id`,
-          [word.term, word.translation, word.targetLanguage, word.wordType,
+           VALUES ($1,$2,$3,$4,$5,'',$6::jsonb,$7::jsonb) RETURNING id`,
+          [word.term, word.translation, word.sourceLanguage, word.targetLanguage, word.wordType,
             JSON.stringify(word.examples.map(([text, translation]) => ({ text, translation }))),
             JSON.stringify(word.englishVerbForms ?? {})],
         );
         for (const name of word.collections) {
-          const key = `${word.targetLanguage}:${name}`;
+          const key = `${word.sourceLanguage}:${word.targetLanguage}:${name}`;
           let collectionId = collections.get(key);
           if (collectionId === undefined) {
             const created = await tx.query<{ id: number }>(
-              'INSERT INTO collections(name,source_language,target_language) VALUES ($1,\'es\',$2) RETURNING id',
-              [name, word.targetLanguage],
+              'INSERT INTO collections(name,source_language,target_language) VALUES ($1,$2,$3) RETURNING id',
+              [name, word.sourceLanguage, word.targetLanguage],
             );
             collectionId = created.rows[0].id;
             collections.set(key, collectionId);
@@ -47,7 +57,8 @@ async function createSession(): Promise<DemoSession> {
         }
       }
     });
-    return { db, api: createApp(db), lastUsed: Date.now(), activeRequests: 0 };
+    // PGlite comparte hilo con Node: una importación grande congelaría la demo para todos.
+    return { db, api: createApp(db, { importLimit: { bytes: '200kb', words: 200 } }), lastUsed: Date.now(), activeRequests: 0 };
   } catch (error) {
     await db.close();
     throw error;
@@ -87,8 +98,18 @@ export function createDemoApp(options: { maxSessions?: number } = {}) {
       return existing;
     }
     if (sessions.size + pendingSessions >= (options.maxSessions ?? maxSessions)) {
-      res.status(503).json({ error: 'La demo está ocupada. Vuelve a intentarlo más tarde.' });
-      return null;
+      let oldestId: string | null = null;
+      for (const [id, session] of sessions) {
+        if (!session.activeRequests && (oldestId === null || session.lastUsed < sessions.get(oldestId)!.lastUsed)) oldestId = id;
+      }
+      if (oldestId === null) {
+        res.status(503).json({ error: 'La demo está ocupada. Vuelve a intentarlo más tarde.' });
+        return null;
+      }
+      const evicted = sessions.get(oldestId)!;
+      sessions.delete(oldestId);
+      try { await evicted.db.close(); }
+      catch (error) { console.error('No se pudo cerrar una sesión sustituida de la demo:', error); }
     }
     pendingSessions += 1;
     let session: DemoSession;
@@ -105,6 +126,14 @@ export function createDemoApp(options: { maxSessions?: number } = {}) {
   }, 60_000);
   cleanup.unref();
 
+  app.use((_req, res, next) => {
+    res.set({
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'same-origin',
+      'Content-Security-Policy': "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none'",
+    });
+    next();
+  });
   app.get('/api/demo-info', (_req, res) => { res.json({ demo: true, temporary: true }); });
   app.use(async (req, res, next) => {
     if (!req.path.startsWith('/api/')) { next(); return; }
@@ -115,10 +144,8 @@ export function createDemoApp(options: { maxSessions?: number } = {}) {
     session.api(req, res);
   });
 
-  app.get(['/', '/estudio'], async (req, res) => {
-    const session = await sessionFor(req, res);
-    if (session) res.sendFile('index.html', { root: frontendDirectory });
-  });
+  // Sin sesión: bots, vistas previas de enlaces y health checks no ocupan plazas.
+  app.get(['/', '/estudio'], (_req, res) => { res.sendFile('index.html', { root: frontendDirectory }); });
   app.use(express.static(frontendDirectory));
   app.use((_req, res) => { res.status(404).end(); });
 
