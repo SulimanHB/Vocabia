@@ -1,6 +1,6 @@
-import { Router } from 'express';
 import { z } from 'zod';
-import type { Database } from './database.js';
+import type { Database } from './db.js';
+import { reply, type ApiRoute } from './http.js';
 import { collectionSchema, wordSchema, type WordInput } from './validation.js';
 
 const referencesSchema = z.array(z.string().trim().min(1).max(80)).max(500);
@@ -46,15 +46,14 @@ function validateWords(rawWords: unknown[], collections: CollectionInput[]): Imp
   return words;
 }
 
-export function createImportRouter(db: Database, maxWords = 5000) {
-  const router = Router();
-  router.post('/', async (req, res) => {
+export const importRoutes = (db: Database, maxWords = 5000): ApiRoute[] => [
+  { method: 'POST', path: '/api/import', handle: async req => {
     const parsed = requestSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: 'El archivo o la opción de importación no son válidos.' }); return; }
+    if (!parsed.success) return reply(400, { error: 'El archivo o la opción de importación no son válidos.' });
     const { document, mode } = parsed.data;
-    if (document.words.length > maxWords) { res.status(413).json({ error: `El archivo tiene más de ${maxWords} palabras.` }); return; }
+    if (document.words.length > maxWords) return reply(413, { error: `El archivo tiene más de ${maxWords} palabras.` });
     const words = validateWords(document.words, document.collections);
-    if (!words) { res.status(400).json({ error: 'El archivo contiene palabras o relaciones inválidas.' }); return; }
+    if (!words) return reply(400, { error: 'El archivo contiene palabras o relaciones inválidas.' });
 
     const result = await db.transaction(async tx => {
       const collectionIds = new Map<string, number>();
@@ -99,7 +98,6 @@ export function createImportRouter(db: Database, maxWords = 5000) {
       }
       return { createdCollections, reusedCollections, createdWords, skippedWords };
     });
-    res.status(201).json(result);
-  });
-  return router;
-}
+    return reply(201, result);
+  } },
+];
