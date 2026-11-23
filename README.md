@@ -12,6 +12,7 @@
 - [Probar la demo en tu equipo](#probar-la-demo-en-tu-equipo)
 - [Instalar para desarrollar](#instalar-para-desarrollar)
 - [Herramientas y decisiones](#herramientas-y-decisiones)
+- [Seguridad](#seguridad)
 - [Comprobaciones](#comprobaciones)
 - [Estado y límites](#estado-y-límites)
 
@@ -29,14 +30,21 @@ Practica las palabras de la pareja y la colección seleccionadas. Puedes escribi
 
 ![Vista de estudio de Vocabia con selección de idiomas, colecciones y tipos de ejercicio](docs/screenshots/estudio.png)
 
+### Tema oscuro
+
+Un interruptor con sol y luna en la cabecera cambia entre tema claro y oscuro. Si no lo tocas, la aplicación sigue el tema del sistema.
+
+![Diccionario de Vocabia en tema oscuro, con el interruptor de tema en la cabecera](docs/screenshots/tema-oscuro.png)
+
 Las capturas muestran la **demo local** en escritorio. La interfaz también se adapta a móvil.
 
 ## Recorrido en un minuto
 
-1. En **Diccionario**, mira el idioma de referencia en el botón de la esquina inferior derecha y elige una bandera para estudiar otro idioma.
-2. Pulsa **Ver una tarjeta** o baja hasta **Mi colección**. Lee un ejemplo y prueba **Escuchar** en una tarjeta.
+1. En **Diccionario**, mira el idioma de referencia en el botón con bandera de la cabecera y elige otra bandera para estudiar otro idioma. Si cambias la interfaz a inglés, verás las tarjetas de inglés a español.
+2. Pulsa **Ver una tarjeta** o baja hasta **Mi colección**. Lee un ejemplo y prueba **Escuchar** o el botón del caracol, que lee la palabra despacio.
 3. Filtra por **Verbos** o entra en una colección como **A1**. Pulsa **Añadir palabra** si quieres crear una tarjeta de prueba.
-4. Entra en **Estudio** desde la cabecera y elige **Practicar**, **Escuchar y elegir** o **Hablar y comprobar**.
+4. Entra en **Estudio** desde la cabecera y pulsa **Practicar (N)**. Marca alguna palabra con **Me costó**: al final de la ronda, el resumen te ofrece repasar solo las difíciles.
+5. Prueba el interruptor de sol y luna para cambiar entre tema claro y oscuro.
 
 En la demo, los cambios son temporales. Puedes experimentar sin alterar las tarjetas de otro visitante.
 
@@ -44,10 +52,11 @@ En la demo, los cambios son temporales. Puedes experimentar sin alterar las tarj
 
 - Crear, editar, borrar y buscar palabras o expresiones con traducción, idiomas, tipo, notas y uno o más ejemplos.
 - Filtrar por pareja de idiomas, tipo de palabra y colecciones personalizadas.
-- Guardar formas de verbos en inglés y escucharlas desde la tarjeta cuando estén disponibles.
+- Guardar formas de verbos en inglés y escucharlas desde la tarjeta cuando estén disponibles. Cada palabra se puede escuchar también a velocidad lenta.
 - Importar y exportar colecciones en JSON. Antes de importar, puedes revisar qué entrará.
 - Detectar tarjetas coincidentes y preparar una fusión de ejemplos, notas y formas verbales con vista previa y opción de deshacer.
-- Practicar con ejercicios escritos, de escucha y de pronunciación. El progreso de estudio pertenece a la sesión local; no se incluye en las colecciones exportadas.
+- Practicar con ejercicios escritos, de escucha y de pronunciación. Si una traducción tiene varias opciones («averiguar / entender»), vale cualquiera de ellas. Al terminar, el resumen cuenta las palabras que sabías y las que te costaron, y ofrece repasar las difíciles. El progreso de estudio pertenece a la sesión local; no se incluye en las colecciones exportadas.
+- Usar la aplicación en tema claro u oscuro, con teclado y con lector de pantalla.
 
 La interfaz está disponible en español, inglés, francés, alemán, italiano, portugués y japonés.
 
@@ -68,9 +77,11 @@ npm run build:demo
 npm run start:demo
 ```
 
-Abre [http://localhost:3001](http://localhost:3001). La demo incluye **40 tarjetas ficticias y 80 frases de ejemplo**: 20 tarjetas de español a inglés y cuatro para cada uno de los otros cinco idiomas de estudio. También trae las colecciones **A1**, **A2** y **Viajes**.
+Abre [http://localhost:3001](http://localhost:3001). La demo incluye **60 tarjetas ficticias y 120 frases de ejemplo**: 20 tarjetas de español a inglés, las mismas 20 de inglés a español (para quien use la interfaz en inglés) y cuatro de español a cada uno de los otros cinco idiomas de estudio. También trae las colecciones **A1**, **A2** y **Viajes**.
 
 Cada navegador recibe una base temporal propia. Los cambios desaparecen tras 30 minutos sin actividad o al reiniciar el servidor. **Usa solo datos de prueba**: esta demo no tiene cuentas ni almacenamiento permanente.
+
+La demo pública está protegida para un servidor compartido: el número de sesiones es limitado (variable `DEMO_MAX_SESSIONS`, 12 por defecto) y, al llegar al máximo, se recicla la sesión inactiva más antigua; las importaciones tienen un tamaño máximo menor que en local, y el servidor envía cabeceras de seguridad (Content-Security-Policy, `nosniff`, `Referrer-Policy`).
 
 ## Instalar para desarrollar
 
@@ -105,6 +116,12 @@ La **API** es la parte del servidor que recibe peticiones del navegador: por eje
 
 La estructura principal es `frontend/` para la interfaz, `backend/` para la API y los datos, y `docs/` para las capturas y el historial. Las decisiones y etapas anteriores están en la [guía de desarrollo](docs/historial-desarrollo.md).
 
+## Seguridad
+
+- La API solo acepta escrituras con `Content-Type: application/json`, lo que bloquea las peticiones simples que otra web podría lanzar contra la app local (CSRF).
+- En local, la API responde solo a `localhost` y `127.0.0.1`, para evitar ataques de *DNS rebinding*.
+- Zod valida en el servidor todos los datos y los identificadores antes de llegar a la base de datos, y las consultas SQL son parametrizadas.
+
 ## Comprobaciones
 
 ```powershell
@@ -120,7 +137,8 @@ npm run build
 
 - La demo todavía no está publicada en una URL; por ahora se ejecuta en local.
 - No hay cuentas ni sincronización entre dispositivos. La demo se reinicia y el modo de desarrollo guarda los datos en el equipo.
-- La voz depende de las funciones y voces disponibles en cada navegador; el reconocimiento de pronunciación puede fallar incluso cuando la palabra se diga bien.
+- La voz depende de las funciones y voces disponibles en cada navegador; el reconocimiento de pronunciación puede fallar incluso cuando la palabra se diga bien, y algunas voces ignoran la velocidad lenta.
+- El tema oscuro usa la función CSS `light-dark()`, disponible desde 2024 en Chrome, Edge, Firefox y Safari.
 - El tutor con IA y el dictado para crear tarjetas son ideas posteriores a esta beta.
 
 [Ver el repositorio en GitHub](https://github.com/SulimanHB/Vocabia)

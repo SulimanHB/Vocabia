@@ -435,6 +435,17 @@ Con la imagen `postgres:15-alpine` en un contenedor temporal, `npm run build` te
 
 `npm test` pasó 40 pruebas del backend y 81 del frontend; `npm run build` terminó correctamente y `npm audit --audit-level=high` no encontró vulnerabilidades conocidas en esa consulta. Las capturas de Diccionario y Estudio se generaron en Chrome con seis palabras ficticias y una base PGlite temporal en memoria. Antes de subir el código se revisaron los archivos nuevos, las variables de ejemplo y los cambios pendientes para evitar publicar datos locales o secretos. Falta probar esta versión en un teléfono físico y preparar un despliegue público con autenticación.
 
+### Revisión de seguridad, accesibilidad y limpieza — 22 y 23 de noviembre de 2026
+
+Se revisó el proyecto con varias auditorías (seguridad, accesibilidad y diseño, y sobreingeniería) y se aplicaron las mejoras por fases, cada una en su commit:
+
+- **Demo pública:** sesiones que no se agotan con visitas sin uso, límite de importación propio, cabeceras de seguridad y health check que no crea sesiones. Se preparó `render.yaml`, pero no se ha desplegado: cada sesión usa una base PGlite de unos 200 MB, por lo que el plan gratuito de 512 MB solo admite una sesión.
+- **Seguridad de la app local:** las escrituras exigen JSON (CSRF), la API solo responde a `localhost` (DNS rebinding) y los identificadores se validan igual en todas las rutas.
+- **Datos:** la exportación grande se puede volver a importar, la vista previa detecta colecciones repetidas con acentos codificados de forma distinta, y las migraciones se aplican en un bucle con una transacción por archivo.
+- **Interfaz:** tarjetas en el idioma de la interfaz, opciones de Estudio más claras, resumen de ronda con acceso a las palabras difíciles, botón de idioma en la cabecera, contraste y zonas táctiles corregidos, tema oscuro con interruptor y botón para escuchar despacio.
+
+`npm test` pasó 53 pruebas del backend y 96 del frontend; `lint`, `typecheck`, `build` y `npm run test:postgres` terminaron correctamente y `npm audit` no encontró vulnerabilidades. La interfaz se comprobó en Chromium a 320, 375, 390 y 1440 px.
+
 ## API
 
 | Método | Ruta | Resultado |
