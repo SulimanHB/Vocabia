@@ -1,8 +1,12 @@
 # Vocabia
 
+[![CI](https://github.com/SulimanHB/Vocabia/actions/workflows/ci.yml/badge.svg)](https://github.com/SulimanHB/Vocabia/actions/workflows/ci.yml)
+
+**[Probar la demo →](https://vocabia-eta.vercel.app)** (sin registro; tus cambios solo existen en tu navegador)
+
 **Un diccionario personal para guardar palabras y practicar idiomas.** Organiza vocabulario por pareja de idiomas y colecciones, añade contexto a cada tarjeta y repásalo con ejercicios escritos, de escucha y de pronunciación.
 
-> **Estado:** beta funcional. La demo funciona entera en el navegador del visitante y está lista para publicarse gratis como sitio estático (por ejemplo, en Vercel). El tutor con IA y la creación de tarjetas por voz quedan para una etapa futura.
+> **Estado:** beta funcional, con [demo pública](https://vocabia-eta.vercel.app) que funciona entera en el navegador del visitante. El tutor con IA y la creación de tarjetas por voz quedan para una etapa futura.
 
 ## Índice
 
@@ -135,11 +139,13 @@ npm run typecheck
 npm run build
 ```
 
+GitHub Actions ejecuta estas mismas comprobaciones (y la compilación de la demo) en cada push; el resultado aparece en la insignia **CI** del principio.
+
 `npm test` ejecuta las pruebas del frontend y del backend. `lint` revisa reglas de código, `typecheck` comprueba los tipos sin generar archivos y `build` verifica que ambas partes compilan. Como comprobación opcional, `npm run test:postgres` usa Docker y un PostgreSQL temporal; no toca los datos de `backend/data/`.
 
 ## Estado y límites
 
-- La demo está preparada para Vercel, pero la URL pública depende de publicarla desde una cuenta de Vercel.
+- La demo pública está en [vocabia-eta.vercel.app](https://vocabia-eta.vercel.app). La primera visita descarga unos 4 MB comprimidos; en móviles antiguos puede tardar más en arrancar.
 - No hay cuentas ni sincronización entre dispositivos. La demo se reinicia y el modo de desarrollo guarda los datos en el equipo.
 - La voz depende de las funciones y voces disponibles en cada navegador; el reconocimiento de pronunciación puede fallar incluso cuando la palabra se diga bien, y algunas voces ignoran la velocidad lenta.
 - El tema oscuro usa la función CSS `light-dark()`, disponible desde 2024 en Chrome, Edge, Firefox y Safari.
