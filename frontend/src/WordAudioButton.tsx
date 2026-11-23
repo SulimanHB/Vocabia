@@ -38,12 +38,14 @@ export function WordAudioButton({ text, language, interfaceLanguage, context, co
   }
 
   return <>
+    <span className="word-audio-group">
     <button type="button" className={`word-audio-button${compact ? ' compact' : ''}`} disabled={!supported} title={supported ? actionLabel : labels.unsupported}
       aria-label={actionLabel} onClick={() => play()}><span aria-hidden="true">♪</span>{!compact && labels.listen}</button>
     {!compact && <button type="button" className="word-audio-button compact word-audio-slow" disabled={!supported}
       title={supported ? label(labels.slow) : labels.unsupported} aria-label={label(labels.slow)} onClick={() => play(slowRate)}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 16.6a5.6 5.6 0 1 1 5.6-5.6 3.7 3.7 0 0 1-3.7 3.7 2.2 2.2 0 0 1-2.2-2.2 1 1 0 0 1 1-1" /><path d="M6.2 18.6H19a2.2 2.2 0 0 0 2-1.3" /><path d="M6.2 18.6A3 3 0 0 1 3.4 15.4v-1.6" /><path d="m3.6 13.6-1-3.4M4.6 13.9l1.3-3.3" /><circle cx="2.5" cy="9.6" r="1.1" /><circle cx="6.1" cy="9.9" r="1.1" /></svg>
     </button>}
+    </span>
     {error && <span className="word-audio-error" role="alert">{labels.error}</span>}
   </>;
 }

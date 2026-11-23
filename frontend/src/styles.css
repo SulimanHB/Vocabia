@@ -2556,6 +2556,10 @@ dialog::backdrop {
   min-width: 44px;
   padding: 6px;
 }
+.word-audio-group {
+  display: inline-flex;
+  gap: 6px;
+}
 .word-audio-slow svg {
   width: 24px;
   height: 24px;
